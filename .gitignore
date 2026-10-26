@@ -1,0 +1,19 @@
+# binaries
+my_torch_analyzer
+my_torch_generator
+
+*.pdf
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+build/
+dist/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# project data
+*.nn
+datasets/
