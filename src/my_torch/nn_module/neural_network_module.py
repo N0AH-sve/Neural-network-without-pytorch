@@ -17,7 +17,8 @@ class Neural_network_module:
         layers = []
         for i in range(len(int_layers) - 1):
             next_inputs = int_layers[i + 1]
-            layer = Layer(int_layers[i], next_inputs, "relu")
+            activation = "linear" if i == len(int_layers) - 2 else "relu"
+            layer = Layer(int_layers[i], next_inputs, activation)
             layers.append(layer)
         return layers
 
@@ -41,5 +42,8 @@ class Neural_network_module:
     def load(self):
         pass
 
-    def train(self):
-        pass
+    def train(self, x, y, epochs=EPOCH, pas=LEARNING_RATE):
+        for _ in range(epochs):
+            output = self.forward(x)
+            self.backward((output - y) / len(x))
+            self.update(pas)
