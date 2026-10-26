@@ -10,25 +10,24 @@ class Layer:
     input : int
     output : int
     active_fct : str # have to do a dictionnary to get the fct in function of itd name
-    def init_w_fct(input : int, output : int):
+    def init_w_fct(self, input : int, output : int):
         pass
 
-    def __init__(self, input: int, output : int):
+    def __init__(self, input: int, output : int, active_fct : str):
         self.input = input
         self.output = output
         self.w = self.init_w_fct(self.input, self.output)
-        self.b = 0 # maybe not correct, have to research bit more, maybe do a rnadom, 'll see later
-        
+        self.b = 0 
 
 
 
-    def active_fct():
+    def active_fct(self):
         pass
 
-    def forward():
+    def forward(self):
         pass
 
-    def backward():
+    def backward(self):
         pass
 
 class Network_neural_module:
@@ -40,7 +39,7 @@ class Network_neural_module:
         layers = []
         for i in range(len(int_layers) - 1):
             next_inputs = int_layers[i + 1]
-            layer = Layer(int_layers[i], next_inputs)
+            layer = Layer(int_layers[i], next_inputs, "ex_act_fct")
             layers.append(layer)
         return layers
 
