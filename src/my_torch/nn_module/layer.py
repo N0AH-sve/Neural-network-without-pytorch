@@ -1,4 +1,5 @@
 import numpy as np
+from my_torch.nn_module import activations
 
 class Layer:
 
@@ -12,6 +13,7 @@ class Layer:
         self.input = input
         self.output = output
         self.name_active_fct = active_fct
+        self.activation = activations.get(active_fct)
         self.w = self.init_w_fct(self.input, self.output)
         self.b = np.zeros(output)
 
@@ -23,7 +25,7 @@ class Layer:
     def forward(self, x):
         self.x = x
         self.z = x @ self.w + self.b
-        return self.z
+        return self.activation.forward(self.z)
 
     def backward(self):
         pass
