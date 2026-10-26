@@ -18,10 +18,6 @@ class Layer:
         self.b = np.zeros(output)
 
 
-
-    def active_fct(self):
-        pass
-
     def forward(self, x):
         self.x = x
         self.z = x @ self.w + self.b
