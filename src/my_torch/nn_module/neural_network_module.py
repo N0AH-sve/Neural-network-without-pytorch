@@ -31,6 +31,10 @@ class Neural_network_module:
             grad = layer.backward(grad)
         return grad
 
+    def update(self, pas):
+        for layer in self.layers:
+            layer.update(pas)
+
     def save(self):
         pass
 

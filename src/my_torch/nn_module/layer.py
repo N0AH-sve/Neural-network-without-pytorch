@@ -32,3 +32,7 @@ class Layer:
         self.grad_w = self.x.T @ delta
         self.grad_b = delta.sum(axis=0)
         return delta @ self.w.T
+
+    def update(self, pas):
+        self.w = self.w - pas * self.grad_w
+        self.b = self.b - pas * self.grad_b
