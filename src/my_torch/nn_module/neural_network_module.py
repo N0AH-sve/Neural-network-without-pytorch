@@ -29,9 +29,3 @@ class Neural_network_module:
 
     def train(self):
         pass
-
-
-
-        
-
-
