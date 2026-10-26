@@ -2,7 +2,6 @@ class Layer:
 
     input : int
     output : int
-    active_fct : str # have to do a dictionnary to get the fct in function of itd name
     def init_w_fct(self, input : int, output : int):
         pass
 

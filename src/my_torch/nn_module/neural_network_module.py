@@ -1,4 +1,4 @@
-from src.my_torch.nn_module.layer import Layer
+from my_torch.nn_module.layer import Layer
 
 EPOCH = 100
 LEARNING_RATE = 0.005
