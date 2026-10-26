@@ -8,8 +8,8 @@ dependencies = [
 ]
 
 [project.scripts]
-my_torch_analyzer = "my_torch.analyzer:main"
-my_torch_generator = "my_torch.generator:main"
+my_torch_analyzer = "my_torch.analyser.analyzer:main"
+my_torch_generator = "my_torch.generator.generator:main"
 
 [dependency-groups]
 dev = [
