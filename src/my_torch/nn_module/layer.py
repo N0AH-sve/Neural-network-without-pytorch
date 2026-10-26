@@ -1,3 +1,5 @@
+import numpy as np
+
 class Layer:
 
     input : int
@@ -10,7 +12,7 @@ class Layer:
         self.output = output
         self.name_active_fct = active_fct
         self.w = self.init_w_fct(self.input, self.output)
-        self.b = [0.0] * output
+        self.b = np.zeros(output)
 
 
 
