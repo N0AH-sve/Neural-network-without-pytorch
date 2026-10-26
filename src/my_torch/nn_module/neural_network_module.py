@@ -17,9 +17,19 @@ class Neural_network_module:
         layers = []
         for i in range(len(int_layers) - 1):
             next_inputs = int_layers[i + 1]
-            layer = Layer(int_layers[i], next_inputs, "ex_act_fct")
+            layer = Layer(int_layers[i], next_inputs, "relu")
             layers.append(layer)
         return layers
+
+    def forward(self, x):
+        for layer in self.layers:
+            x = layer.forward(x)
+        return x
+
+    def backward(self, grad):
+        for layer in reversed(self.layers):
+            grad = layer.backward(grad)
+        return grad
 
     def save(self):
         pass

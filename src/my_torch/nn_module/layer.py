@@ -27,5 +27,8 @@ class Layer:
         self.z = x @ self.w + self.b
         return self.activation.forward(self.z)
 
-    def backward(self):
-        pass
+    def backward(self, grad):
+        delta = self.activation.backward(self.z, grad)
+        self.grad_w = self.x.T @ delta
+        self.grad_b = delta.sum(axis=0)
+        return delta @ self.w.T
