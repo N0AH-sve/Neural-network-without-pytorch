@@ -22,7 +22,7 @@ def test_layer_biases_start_at_zero():
 
 
 def test_layer_remembers_its_activation_name():
-    assert Layer(5, 3, "softmax").name_active_fct == "softmax"
+    assert Layer(5, 3, "tanh").name_active_fct == "tanh"
 
 
 @pytest.mark.parametrize("sizes, expected", [
