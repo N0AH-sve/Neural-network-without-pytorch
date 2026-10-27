@@ -9,13 +9,13 @@ class Layer:
         rng = np.random.default_rng()
         return rng.normal(0.0, 0.1, (input, output))
 
-    def __init__(self, input: int, output : int, active_fct : str):
+    def __init__(self, input: int, output : int, active_fct : str, w=None, b=None):
         self.input = input
         self.output = output
         self.name_active_fct = active_fct
         self.activation = activations.get(active_fct)
-        self.w = self.init_w_fct(self.input, self.output)
-        self.b = np.zeros(output)
+        self.w = self.init_w_fct(self.input, self.output) if w is None else np.array(w, dtype=float)
+        self.b = np.zeros(output) if b is None else np.array(b, dtype=float)
 
 
     def forward(self, x):

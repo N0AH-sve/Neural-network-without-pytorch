@@ -14,3 +14,22 @@ def test_help_exits_zero(module, capsys):
 def test_no_argument_exits_84(module, capsys):
     assert module.main([]) == 84
     assert capsys.readouterr().err.startswith("USAGE")
+
+
+@pytest.mark.parametrize("error", [
+    ValueError("layer 0: missing key 'b'"),
+    FileNotFoundError("no such file"),
+])
+def test_analyzer_turns_a_load_error_into_84(monkeypatch, capsys, error):
+    """load() raises ValueError or OSError; main() is where they become exit 84."""
+    def failing_run(argv):
+        raise error
+
+    monkeypatch.setattr(analyzer, "run", failing_run)
+    assert analyzer.main(["--predict", "net.nn", "boards.txt"]) == 84
+    assert str(error) in capsys.readouterr().err
+
+
+def test_analyzer_does_not_swallow_a_successful_run(monkeypatch):
+    monkeypatch.setattr(analyzer, "run", lambda argv: 0)
+    assert analyzer.main([]) == 0
