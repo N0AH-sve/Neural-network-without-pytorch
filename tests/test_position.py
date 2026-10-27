@@ -91,3 +91,19 @@ def test_invalid_board_character(placement):
 def test_error_names_the_rank():
     with pytest.raises(FenError, match="rank 1"):
         Position.from_fen("4k3/8/8/8/8/8/8/4K2x w - -")
+
+
+@pytest.mark.parametrize("placement, king, count", [
+    ("8/8/8/8/8/8/8/4K3", "'k'", 0),
+    ("4k3/8/8/8/8/8/8/8", "'K'", 0),
+    ("4k3/8/8/8/8/8/8/K3K3", "'K'", 2),
+    ("k6k/8/8/8/8/8/8/4K3", "'k'", 2),
+])
+def test_exactly_one_king_per_side(placement, king, count):
+    with pytest.raises(FenError, match=f"exactly one {king}, got {count}"):
+        Position.from_fen(f"{placement} w - -")
+
+
+def test_adjacent_kings_are_accepted():
+    """Legality is not checked: the network decides, not the parser."""
+    assert Position.from_fen("8/8/8/8/8/8/8/kK6 w - -").board[7] == "kK......"
