@@ -107,3 +107,14 @@ def test_exactly_one_king_per_side(placement, king, count):
 def test_adjacent_kings_are_accepted():
     """Legality is not checked: the network decides, not the parser."""
     assert Position.from_fen("8/8/8/8/8/8/8/kK6 w - -").board[7] == "kK......"
+
+
+@pytest.mark.parametrize("side", ["w", "b"])
+def test_valid_side_to_move(side):
+    assert Position.from_fen(f"4k3/8/8/8/8/8/8/4K3 {side} - -").side == side
+
+
+@pytest.mark.parametrize("side", ["x", "W", "B", "wb", "white"])
+def test_invalid_side_to_move(side):
+    with pytest.raises(FenError, match="side to move"):
+        Position.from_fen(f"4k3/8/8/8/8/8/8/4K3 {side} - -")
