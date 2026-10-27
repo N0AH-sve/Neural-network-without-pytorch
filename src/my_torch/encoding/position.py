@@ -7,9 +7,7 @@ from typing import Literal, Self
 PIECES = "PNBRQKpnbrqk"
 
 _SIDE = re.compile(r"[wb]")
-# Each right at most once, in the standard KQkq order.
 _CASTLING = re.compile(r"-|K?Q?k?q?")
-# The square behind a pawn that just moved two squares: rank 3 or 6.
 _EN_PASSANT = re.compile(r"-|[a-h][36]")
 
 
@@ -36,7 +34,10 @@ class Position:
         _match(_SIDE, side, "side to move", "'w' or 'b'")
         _match(_CASTLING, castling, "castling", "'-' or a subset of 'KQkq'")
         _match(_EN_PASSANT, en_passant, "en passant", "'-' or a square on rank 3 or 6")
-        counters = [int(counter) for counter in fields[4:]]
+        counters = [
+            _parse_counter(value, name)
+            for value, name in zip(fields[4:], ("halfmove", "fullmove"))
+        ]
         return cls(_parse_board(placement), side, castling, en_passant, *counters)
 
 
@@ -73,3 +74,9 @@ def _check_kings(board: tuple[str, ...]) -> None:
 def _match(pattern: re.Pattern[str], value: str, field: str, expected: str) -> None:
     if not pattern.fullmatch(value):
         raise FenError(f"{field}: expected {expected}, got {value!r}")
+
+
+def _parse_counter(value: str, name: str) -> int:
+    if not value.isdecimal():
+        raise FenError(f"{name}: expected a non-negative integer, got {value!r}")
+    return int(value)
