@@ -129,3 +129,14 @@ def test_valid_castling(castling):
 def test_invalid_castling(castling):
     with pytest.raises(FenError, match="castling"):
         Position.from_fen(f"4k3/8/8/8/8/8/8/4K3 w {castling} -")
+
+
+@pytest.mark.parametrize("square", ["-", "a3", "d3", "e6", "h6"])
+def test_valid_en_passant(square):
+    assert Position.from_fen(f"4k3/8/8/8/8/8/8/4K3 w - {square}").en_passant == square
+
+
+@pytest.mark.parametrize("square", ["e5", "e4", "i3", "E3", "d", "d33"])
+def test_invalid_en_passant(square):
+    with pytest.raises(FenError, match="en passant"):
+        Position.from_fen(f"4k3/8/8/8/8/8/8/4K3 w - {square}")
