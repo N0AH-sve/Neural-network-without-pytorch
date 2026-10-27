@@ -140,3 +140,29 @@ def test_valid_en_passant(square):
 def test_invalid_en_passant(square):
     with pytest.raises(FenError, match="en passant"):
         Position.from_fen(f"4k3/8/8/8/8/8/8/4K3 w - {square}")
+
+
+@pytest.mark.parametrize("counters, expected", [
+    ("0 1", (0, 1)),
+    ("12 40", (12, 40)),
+    ("007 1", (7, 1)),
+])
+def test_valid_move_counters(counters, expected):
+    position = Position.from_fen(f"4k3/8/8/8/8/8/8/4K3 w - - {counters}")
+    assert (position.halfmove, position.fullmove) == expected
+
+
+@pytest.mark.parametrize("counters, field", [
+    ("-1 1", "halfmove"),
+    ("a 1", "halfmove"),
+    ("0 1.5", "fullmove"),
+    ("0 ²", "fullmove"),
+])
+def test_invalid_move_counters(counters, field):
+    with pytest.raises(FenError, match=field):
+        Position.from_fen(f"4k3/8/8/8/8/8/8/4K3 w - - {counters}")
+
+
+def test_counters_default_when_omitted():
+    position = Position.from_fen("4k3/8/8/8/8/8/8/4K3 w - -")
+    assert (position.halfmove, position.fullmove) == (0, 1)
