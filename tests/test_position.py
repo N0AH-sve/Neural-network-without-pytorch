@@ -118,3 +118,14 @@ def test_valid_side_to_move(side):
 def test_invalid_side_to_move(side):
     with pytest.raises(FenError, match="side to move"):
         Position.from_fen(f"4k3/8/8/8/8/8/8/4K3 {side} - -")
+
+
+@pytest.mark.parametrize("castling", ["-", "KQkq", "Kq", "Qk", "k"])
+def test_valid_castling(castling):
+    assert Position.from_fen(f"4k3/8/8/8/8/8/8/4K3 w {castling} -").castling == castling
+
+
+@pytest.mark.parametrize("castling", ["KK", "qK", "kQ", "X", "K-", "--"])
+def test_invalid_castling(castling):
+    with pytest.raises(FenError, match="castling"):
+        Position.from_fen(f"4k3/8/8/8/8/8/8/4K3 w {castling} -")
