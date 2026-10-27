@@ -1,9 +1,12 @@
 """Chessboards read from Forsyth-Edwards Notation (FEN)."""
 
+import re
 from dataclasses import dataclass
 from typing import Literal, Self
 
 PIECES = "PNBRQKpnbrqk"
+
+_SIDE = re.compile(r"[wb]")
 
 
 class FenError(ValueError):
@@ -26,6 +29,7 @@ class Position:
         if len(fields) not in (4, 6):
             raise FenError(f"expected 4 or 6 fields, got {len(fields)}")
         placement, side, castling, en_passant = fields[:4]
+        _match(_SIDE, side, "side to move", "'w' or 'b'")
         counters = [int(counter) for counter in fields[4:]]
         return cls(_parse_board(placement), side, castling, en_passant, *counters)
 
@@ -58,3 +62,8 @@ def _check_kings(board: tuple[str, ...]) -> None:
         count = sum(rank.count(king) for rank in board)
         if count != 1:
             raise FenError(f"board: expected exactly one {king!r}, got {count}")
+
+
+def _match(pattern: re.Pattern[str], value: str, field: str, expected: str) -> None:
+    if not pattern.fullmatch(value):
+        raise FenError(f"{field}: expected {expected}, got {value!r}")
