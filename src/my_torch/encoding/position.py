@@ -7,6 +7,8 @@ from typing import Literal, Self
 PIECES = "PNBRQKpnbrqk"
 
 _SIDE = re.compile(r"[wb]")
+# Each right at most once, in the standard KQkq order.
+_CASTLING = re.compile(r"-|K?Q?k?q?")
 
 
 class FenError(ValueError):
@@ -30,6 +32,7 @@ class Position:
             raise FenError(f"expected 4 or 6 fields, got {len(fields)}")
         placement, side, castling, en_passant = fields[:4]
         _match(_SIDE, side, "side to move", "'w' or 'b'")
+        _match(_CASTLING, castling, "castling", "'-' or a subset of 'KQkq'")
         counters = [int(counter) for counter in fields[4:]]
         return cls(_parse_board(placement), side, castling, en_passant, *counters)
 
