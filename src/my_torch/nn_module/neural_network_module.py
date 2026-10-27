@@ -2,7 +2,7 @@ import json
 
 from my_torch.nn_module.layer import Layer
 
-EPOCH = 100
+EPOCH = 2000
 LEARNING_RATE = 0.005
 SEED = 42 # everyone have 42 <
 FORMAT_VERSION = 1
