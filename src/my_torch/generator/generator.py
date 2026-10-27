@@ -2,6 +2,8 @@
 
 import sys
 
+from my_torch.nn_module.neural_network_module import Neural_network_module
+
 USAGE = """USAGE
     ./my_torch_generator config_file_1 nb_1 [config_file_2 nb_2...]
 
@@ -10,6 +12,26 @@ DESCRIPTION
                     network we want to generate.
     nb_i            Number of neural networks to generate based on the
                     configuration file."""
+
+
+
+class Generator():
+
+    def __init__(self):
+        self.neural_network = Neural_network_module
+        self.path = ""
+        
+
+    def get_conf(self):
+        pass
+
+    def check_conf(self):
+        pass
+
+    def run(self):
+        self.get_conf
+        self.check_conf
+        self.neural_network.save(path=self.path)
 
 
 def main(argv: list[str] | None = None) -> int:

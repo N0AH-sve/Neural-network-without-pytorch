@@ -19,6 +19,7 @@ class Neural_network_module:
         self.learning_rate = learning_rate
         self.seed = seed
         self.layers = self._init_layers(int_layers) if layers is None else layers
+        self.version = 1
 
 
     def _init_layers(self, int_layers : list[int]) -> list[Layer]:
@@ -46,7 +47,7 @@ class Neural_network_module:
 
     def to_dict(self) -> dict:
         return {
-            "version": FORMAT_VERSION,
+            "version": self.version,
             "hyperparameters": {
                 "epochs": self.epochs,
                 "learning_rate": self.learning_rate,
