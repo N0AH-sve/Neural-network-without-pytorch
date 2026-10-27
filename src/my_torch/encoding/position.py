@@ -34,7 +34,9 @@ def _parse_board(placement: str) -> tuple[str, ...]:
     ranks = placement.split("/")
     if len(ranks) != 8:
         raise FenError(f"board: expected 8 ranks, got {len(ranks)}")
-    return tuple(_parse_rank(rank, 8 - row) for row, rank in enumerate(ranks))
+    board = tuple(_parse_rank(rank, 8 - row) for row, rank in enumerate(ranks))
+    _check_kings(board)
+    return board
 
 
 def _parse_rank(rank: str, number: int) -> str:
@@ -49,3 +51,10 @@ def _parse_rank(rank: str, number: int) -> str:
     if len(squares) != 8:
         raise FenError(f"board: rank {number} has {len(squares)} squares, expected 8")
     return squares
+
+
+def _check_kings(board: tuple[str, ...]) -> None:
+    for king in "Kk":
+        count = sum(rank.count(king) for rank in board)
+        if count != 1:
+            raise FenError(f"board: expected exactly one {king!r}, got {count}")
