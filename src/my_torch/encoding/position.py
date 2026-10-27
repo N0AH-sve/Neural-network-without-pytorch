@@ -9,6 +9,8 @@ PIECES = "PNBRQKpnbrqk"
 _SIDE = re.compile(r"[wb]")
 # Each right at most once, in the standard KQkq order.
 _CASTLING = re.compile(r"-|K?Q?k?q?")
+# The square behind a pawn that just moved two squares: rank 3 or 6.
+_EN_PASSANT = re.compile(r"-|[a-h][36]")
 
 
 class FenError(ValueError):
@@ -33,6 +35,7 @@ class Position:
         placement, side, castling, en_passant = fields[:4]
         _match(_SIDE, side, "side to move", "'w' or 'b'")
         _match(_CASTLING, castling, "castling", "'-' or a subset of 'KQkq'")
+        _match(_EN_PASSANT, en_passant, "en passant", "'-' or a square on rank 3 or 6")
         counters = [int(counter) for counter in fields[4:]]
         return cls(_parse_board(placement), side, castling, en_passant, *counters)
 
