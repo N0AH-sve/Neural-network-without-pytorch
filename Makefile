@@ -19,12 +19,12 @@ install:
 	$(UV) sync
 
 $(ANALYZER): install
-	@printf '#!/bin/sh\nexec uv run --quiet python -m my_torch.analyzer "$$@"\n' > $@
+	@printf '#!/bin/sh\nexec uv run --quiet python -m my_torch.analyser.analyzer "$$@"\n' > $@
 	@chmod +x $@
 	@echo "$@ ready"
 
 $(GENERATOR): install
-	@printf '#!/bin/sh\nexec uv run --quiet python -m my_torch.generator "$$@"\n' > $@
+	@printf '#!/bin/sh\nexec uv run --quiet python -m my_torch.generator.generator "$$@"\n' > $@
 	@chmod +x $@
 	@echo "$@ ready"
 
