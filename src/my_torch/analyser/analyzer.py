@@ -19,15 +19,23 @@ DESCRIPTION
     CHESSFILE   File containing chessboards"""
 
 
-def main(argv: list[str] | None = None) -> int:
-    argv = sys.argv[1:] if argv is None else argv
-
+def run(argv: list[str]) -> int:
     if "--help" in argv or "-h" in argv:
         print(USAGE)
         return 0
 
     print(USAGE, file=sys.stderr)
     return 84
+
+
+def main(argv: list[str] | None = None) -> int:
+    argv = sys.argv[1:] if argv is None else argv
+
+    try:
+        return run(argv)
+    except (OSError, ValueError) as error:
+        print(f"my_torch_analyzer: {error}", file=sys.stderr)
+        return 84
 
 
 if __name__ == "__main__":
