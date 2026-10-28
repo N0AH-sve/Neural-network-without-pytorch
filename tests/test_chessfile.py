@@ -87,3 +87,24 @@ def test_read_samples_error_names_the_line():
     with pytest.raises(FenError, match="^line 3: side to move") as error:
         read_samples(lines)
     assert isinstance(error.value.__cause__, FenError)
+
+
+def test_labels_are_optional_by_default():
+    assert [s.label for s in read_samples([KINGS, f"{KINGS} Check"])] == [None, "Check"]
+
+
+def test_required_labels_accept_a_fully_labelled_file():
+    lines = [f"{fen} {label}" for fen, label in SUBJECT_LINES]
+    assert len(read_samples(lines, require_labels=True)) == len(SUBJECT_LINES)
+
+
+def test_a_missing_label_names_its_line():
+    """Blank lines still count, as for every other error."""
+    lines = [f"{KINGS} Check", "", f"{KINGS} 0 1"]
+    with pytest.raises(FenError, match="^line 3: missing the expected output$"):
+        read_samples(lines, require_labels=True)
+
+
+def test_require_labels_is_keyword_only():
+    with pytest.raises(TypeError):
+        read_samples([f"{KINGS} Check"], True)
