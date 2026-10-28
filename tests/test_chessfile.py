@@ -1,6 +1,6 @@
 import pytest
 
-from my_torch.encoding.chessfile import parse_line
+from my_torch.encoding.chessfile import parse_line, read_samples
 from my_torch.encoding.position import FenError, Position
 
 KINGS = "4k3/8/8/8/8/8/8/4K3 w - -"
@@ -62,3 +62,28 @@ def test_whitespace_is_normalised(line):
 def test_invalid_lines(line, message):
     with pytest.raises(FenError, match=message):
         parse_line(line)
+
+
+def test_read_samples_keeps_the_order():
+    lines = [f"{fen} {label}" for fen, label in SUBJECT_LINES]
+    assert [s.label for s in read_samples(lines)] == [label for _, label in SUBJECT_LINES]
+
+
+def test_read_samples_skips_blank_lines():
+    lines = ["\n", f"{KINGS} Check\n", "   \r\n", "\t\n", f"{KINGS}\n", ""]
+    assert [s.label for s in read_samples(lines)] == ["Check", None]
+
+
+def test_read_samples_reads_an_open_file(tmp_path):
+    path = tmp_path / "boards.txt"
+    path.write_text("".join(f"{fen} {label}\n" for fen, label in SUBJECT_LINES))
+    with path.open() as file:
+        assert len(read_samples(file)) == len(SUBJECT_LINES)
+
+
+def test_read_samples_error_names_the_line():
+    """Blank lines still count, so the number matches the editor."""
+    lines = [KINGS, "", "4k3/8/8/8/8/8/8/4K3 W - -"]
+    with pytest.raises(FenError, match="^line 3: side to move") as error:
+        read_samples(lines)
+    assert isinstance(error.value.__cause__, FenError)
