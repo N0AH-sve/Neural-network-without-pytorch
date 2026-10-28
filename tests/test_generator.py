@@ -1,0 +1,319 @@
+import json
+
+import pytest
+
+from my_torch.generator.generator import (
+    DEFAULT_INIT,
+    Generator,
+    GeneratorError,
+    main,
+)
+from my_torch.nn_module.neural_network_module import (
+    EPOCH,
+    LEARNING_RATE,
+    SEED,
+    Neural_network_module,
+)
+
+VALID_CONF = {
+    "layers": [4, 3, 2],
+    "activations": ["relu", "sigmoid"],
+}
+
+
+def write_conf(tmp_path, conf, name="net.conf"):
+    """Drop a configuration on disk and return its path as a string."""
+    path = tmp_path / name
+    path.write_text(conf if isinstance(conf, str) else json.dumps(conf))
+    return str(path)
+
+
+# --- parse_args ------------------------------------------------------------
+
+def test_parse_args_pairs_each_config_with_its_count():
+    assert Generator.parse_args(["a.conf", "2", "b.conf", "1"]) == [
+        ("a.conf", 2),
+        ("b.conf", 1),
+    ]
+
+
+def test_parse_args_rejects_an_empty_command_line():
+    with pytest.raises(GeneratorError, match="invalid number of arguments"):
+        Generator.parse_args([])
+
+
+def test_parse_args_rejects_a_config_without_its_count():
+    with pytest.raises(GeneratorError, match="invalid number of arguments"):
+        Generator.parse_args(["a.conf", "2", "b.conf"])
+
+
+@pytest.mark.parametrize("nb", ["0", "-1", "1.5", "two", "", " 1"])
+def test_parse_args_rejects_a_count_that_is_not_a_positive_integer(nb):
+    with pytest.raises(GeneratorError, match="invalid number of networks"):
+        Generator.parse_args(["a.conf", nb])
+
+
+# --- get_conf --------------------------------------------------------------
+
+def test_get_conf_reads_a_json_object(tmp_path):
+    path = write_conf(tmp_path, VALID_CONF)
+    assert Generator([path, "1"]).get_conf(path) == VALID_CONF
+
+
+def test_get_conf_rejects_a_file_that_is_not_json(tmp_path):
+    path = write_conf(tmp_path, "{not json")
+    with pytest.raises(GeneratorError, match="invalid JSON"):
+        Generator([path, "1"]).get_conf(path)
+
+
+def test_get_conf_names_the_offending_file(tmp_path):
+    path = write_conf(tmp_path, "{not json", name="broken.conf")
+    with pytest.raises(GeneratorError, match="broken.conf"):
+        Generator([path, "1"]).get_conf(path)
+
+
+def test_get_conf_lets_a_missing_file_raise_an_os_error(tmp_path):
+    missing = str(tmp_path / "nope.conf")
+    with pytest.raises(OSError):
+        Generator([missing, "1"]).get_conf(missing)
+
+
+# --- check_conf ------------------------------------------------------------
+
+def check(conf):
+    """Validate a configuration the way run() does, without touching the disk."""
+    Generator(["net.conf", "1"]).check_conf(conf, "net.conf")
+
+
+def test_check_conf_accepts_a_minimal_configuration():
+    check(VALID_CONF)
+
+
+def test_check_conf_accepts_the_optional_keys():
+    check(VALID_CONF | {
+        "init": DEFAULT_INIT,
+        "hyperparameters": {"epochs": 10, "learning_rate": 0.5, "seed": 42},
+    })
+
+
+def test_check_conf_rejects_a_configuration_that_is_not_an_object():
+    with pytest.raises(GeneratorError, match="must be an object"):
+        check([4, 3, 2])
+
+
+@pytest.mark.parametrize("key", ["layers", "activations"])
+def test_check_conf_rejects_a_configuration_missing_a_mandatory_key(key):
+    conf = {k: v for k, v in VALID_CONF.items() if k != key}
+    with pytest.raises(GeneratorError, match=f"missing key '{key}'"):
+        check(conf)
+
+
+@pytest.mark.parametrize("layers", [[], [4], "4,3", 4])
+def test_check_conf_rejects_layers_that_do_not_describe_two_sizes(layers):
+    with pytest.raises(GeneratorError, match="at least 2 sizes"):
+        check({"layers": layers, "activations": ["relu"]})
+
+
+@pytest.mark.parametrize("size", ["3", 3.0, None, True])
+def test_check_conf_rejects_a_layer_size_that_is_not_an_integer(size):
+    with pytest.raises(GeneratorError, match="is not an integer"):
+        check({"layers": [4, size], "activations": ["relu"]})
+
+
+@pytest.mark.parametrize("size", [0, -2])
+def test_check_conf_rejects_a_layer_size_that_is_not_positive(size):
+    with pytest.raises(GeneratorError, match="must be positive"):
+        check({"layers": [4, size], "activations": ["relu"]})
+
+
+def test_check_conf_rejects_activations_that_are_not_a_list():
+    with pytest.raises(GeneratorError, match="must be a list"):
+        check({"layers": [4, 3], "activations": "relu"})
+
+
+@pytest.mark.parametrize("names", [[], ["relu"], ["relu", "relu", "relu"]])
+def test_check_conf_wants_one_activation_per_connection(names):
+    """3 layer sizes describe 2 connections, so exactly 2 activations."""
+    with pytest.raises(GeneratorError, match="one per connection"):
+        check({"layers": [4, 3, 2], "activations": names})
+
+
+def test_check_conf_rejects_an_unknown_activation():
+    with pytest.raises(GeneratorError, match="unknown activation"):
+        check({"layers": [4, 3], "activations": ["banana"]})
+
+
+def test_check_conf_reports_which_activation_is_unknown():
+    with pytest.raises(GeneratorError, match="activation 1"):
+        check({"layers": [4, 3, 2], "activations": ["relu", "banana"]})
+
+
+def test_check_conf_rejects_hyperparameters_that_are_not_an_object():
+    with pytest.raises(GeneratorError, match="'hyperparameters' must be an object"):
+        check(VALID_CONF | {"hyperparameters": [10, 0.5]})
+
+
+@pytest.mark.parametrize("key", ["epochs", "seed"])
+@pytest.mark.parametrize("value", ["10", 10.5, None, True])
+def test_check_conf_rejects_a_non_integer_epochs_or_seed(key, value):
+    with pytest.raises(GeneratorError, match=f"'{key}' must be an integer"):
+        check(VALID_CONF | {"hyperparameters": {key: value}})
+
+
+@pytest.mark.parametrize("epochs", [0, -5])
+def test_check_conf_rejects_epochs_that_are_not_positive(epochs):
+    with pytest.raises(GeneratorError, match="'epochs' must be positive"):
+        check(VALID_CONF | {"hyperparameters": {"epochs": epochs}})
+
+
+def test_check_conf_accepts_a_negative_seed():
+    """Unlike epochs, a seed has no sign constraint."""
+    check(VALID_CONF | {"hyperparameters": {"seed": -42}})
+
+
+@pytest.mark.parametrize("rate", ["0.5", None, True])
+def test_check_conf_rejects_a_learning_rate_that_is_not_a_number(rate):
+    with pytest.raises(GeneratorError, match="'learning_rate' must be a number"):
+        check(VALID_CONF | {"hyperparameters": {"learning_rate": rate}})
+
+
+@pytest.mark.parametrize("rate", [0, 0.0, -0.1])
+def test_check_conf_rejects_a_learning_rate_that_is_not_positive(rate):
+    with pytest.raises(GeneratorError, match="'learning_rate' must be positive"):
+        check(VALID_CONF | {"hyperparameters": {"learning_rate": rate}})
+
+
+def test_check_conf_rejects_an_unknown_init_strategy():
+    with pytest.raises(GeneratorError, match="unknown init"):
+        check(VALID_CONF | {"init": "xavier"})
+
+
+# --- run -------------------------------------------------------------------
+
+def test_run_writes_one_file_per_requested_network(tmp_path, monkeypatch):
+    path = write_conf(tmp_path, VALID_CONF)
+    monkeypatch.chdir(tmp_path)
+
+    Generator([path, "3"]).run()
+
+    assert sorted(p.name for p in tmp_path.glob("*.nn")) == [
+        "net_1.nn", "net_2.nn", "net_3.nn",
+    ]
+
+
+def test_run_names_the_networks_after_the_config_file(tmp_path, monkeypatch):
+    path = write_conf(tmp_path, VALID_CONF, name="deep.conf")
+    monkeypatch.chdir(tmp_path)
+
+    Generator([path, "1"]).run()
+
+    assert (tmp_path / "deep_1.nn").exists()
+
+
+def test_run_handles_several_configurations(tmp_path, monkeypatch):
+    first = write_conf(tmp_path, VALID_CONF, name="a.conf")
+    second = write_conf(tmp_path, VALID_CONF, name="b.conf")
+    monkeypatch.chdir(tmp_path)
+
+    Generator([first, "2", second, "1"]).run()
+
+    assert sorted(p.name for p in tmp_path.glob("*.nn")) == [
+        "a_1.nn", "a_2.nn", "b_1.nn",
+    ]
+
+
+def test_run_writes_nothing_when_a_later_configuration_is_broken(tmp_path,
+                                                                 monkeypatch):
+    """Every configuration is validated before the first network is written."""
+    good = write_conf(tmp_path, VALID_CONF, name="good.conf")
+    bad = write_conf(tmp_path, {"layers": [4, 3]}, name="bad.conf")
+    monkeypatch.chdir(tmp_path)
+
+    with pytest.raises(GeneratorError, match="missing key 'activations'"):
+        Generator([good, "1", bad, "1"]).run()
+
+    assert list(tmp_path.glob("*.nn")) == []
+
+
+def test_run_produces_networks_that_can_be_loaded_back(tmp_path, monkeypatch):
+    path = write_conf(tmp_path, VALID_CONF)
+    monkeypatch.chdir(tmp_path)
+
+    Generator([path, "1"]).run()
+    net = Neural_network_module.load(str(tmp_path / "net_1.nn"))
+
+    assert [layer.input for layer in net.layers] == [4, 3]
+    assert [layer.output for layer in net.layers] == [3, 2]
+    assert [layer.activation.name for layer in net.layers] == ["relu", "sigmoid"]
+
+
+def test_run_carries_the_hyperparameters_into_the_network(tmp_path, monkeypatch):
+    conf = VALID_CONF | {
+        "hyperparameters": {"epochs": 7, "learning_rate": 0.25, "seed": 1234},
+    }
+    path = write_conf(tmp_path, conf)
+    monkeypatch.chdir(tmp_path)
+
+    Generator([path, "1"]).run()
+    net = Neural_network_module.load(str(tmp_path / "net_1.nn"))
+
+    assert net.epochs == 7
+    assert net.learning_rate == 0.25
+    assert net.seed == 1234
+
+
+def test_run_falls_back_to_the_default_hyperparameters(tmp_path, monkeypatch):
+    path = write_conf(tmp_path, VALID_CONF)
+    monkeypatch.chdir(tmp_path)
+
+    Generator([path, "1"]).run()
+    net = Neural_network_module.load(str(tmp_path / "net_1.nn"))
+
+    assert net.epochs == EPOCH
+    assert net.learning_rate == LEARNING_RATE
+    assert net.seed == SEED
+
+
+def test_run_randomizes_each_network_independently(tmp_path, monkeypatch):
+    """Two networks from the same config must not share their weights."""
+    path = write_conf(tmp_path, VALID_CONF)
+    monkeypatch.chdir(tmp_path)
+
+    Generator([path, "2"]).run()
+    first = Neural_network_module.load(str(tmp_path / "net_1.nn"))
+    second = Neural_network_module.load(str(tmp_path / "net_2.nn"))
+
+    assert not (first.layers[0].w == second.layers[0].w).all()
+
+
+# --- main ------------------------------------------------------------------
+
+def test_main_returns_zero_on_a_valid_configuration(tmp_path, monkeypatch):
+    path = write_conf(tmp_path, VALID_CONF)
+    monkeypatch.chdir(tmp_path)
+
+    assert main([path, "1"]) == 0
+    assert (tmp_path / "net_1.nn").exists()
+
+
+def test_main_turns_a_broken_configuration_into_84(tmp_path, monkeypatch, capsys):
+    path = write_conf(tmp_path, {"layers": [4, 3]})
+    monkeypatch.chdir(tmp_path)
+
+    assert main([path, "1"]) == 84
+    assert "missing key 'activations'" in capsys.readouterr().err
+
+
+def test_main_turns_a_missing_configuration_into_84(tmp_path, capsys):
+    assert main([str(tmp_path / "nope.conf"), "1"]) == 84
+    assert capsys.readouterr().err.startswith("my_torch_generator:")
+
+
+def test_main_turns_a_bad_command_line_into_84(capsys):
+    assert main(["net.conf"]) == 84
+    assert "invalid number of arguments" in capsys.readouterr().err
+
+
+def test_main_prefixes_every_error_with_the_binary_name(tmp_path, capsys):
+    assert main([str(tmp_path / "nope.conf"), "1"]) == 84
+    assert capsys.readouterr().err.startswith("my_torch_generator: ")
