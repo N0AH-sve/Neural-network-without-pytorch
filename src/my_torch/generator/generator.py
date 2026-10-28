@@ -34,13 +34,20 @@ class Generator:
             raise GeneratorError("invalid number of arguments")
         jobs = []
         for path, nb in zip(argv[0::2], argv[1::2]):
-            if not nb.isdigit() or int(nb) <= 0:
+            if not nb.isdecimal() or int(nb) <= 0:
                 raise GeneratorError(f"invalid number of networks: '{nb}'")
             jobs.append((path, int(nb)))
         return jobs
 
     def get_conf(self, path: str) -> dict:
-        pass
+        """Read a JSON configuration file. Its content is validated by check_conf."""
+        with open(path) as file:
+            try:
+                return json.load(file)
+            except (UnicodeDecodeError, json.JSONDecodeError) as error:
+                raise GeneratorError(
+                    f"{os.path.basename(path)}: invalid JSON: {error}"
+                ) from error
 
     @staticmethod
     def _check_layers(conf: dict, where: str) -> list[int]:
@@ -124,6 +131,9 @@ def main(argv: list[str] | None = None) -> int:
     if "--help" in argv or "-h" in argv:
         print(USAGE)
         return 0
+    if not argv:
+        print(USAGE, file=sys.stderr)
+        return 84
     try:
         Generator(argv).run()
     except (GeneratorError, OSError) as e:
