@@ -3,6 +3,7 @@
 import sys
 
 from my_torch.analyser.arguments import parse_args
+from my_torch.analyser.predict import Predict
 from my_torch.analyser.train import train
 
 USAGE = """USAGE
@@ -33,8 +34,7 @@ def run(argv: list[str]) -> int:
     args = parse_args(argv)
     if args.mode == "train":
         return train(args)
-    print("my_torch_analyzer: --predict is not implemented yet", file=sys.stderr)
-    return 84
+    return Predict(args.loadfile, args.chessfile).run()
 
 
 def main(argv: list[str] | None = None) -> int:
