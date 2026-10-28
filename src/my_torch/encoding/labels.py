@@ -6,6 +6,8 @@ the subject, Fool's mate (White to move and mated) is "Checkmate Black".
 
 from collections.abc import Iterable
 
+import numpy as np
+
 _COLOURS = ("white", "black")
 
 
@@ -36,6 +38,11 @@ class LabelSet:
 
     def label(self, index: int) -> str:
         return self.classes[index]
+
+    def one_hot(self, labels: Iterable[str]) -> np.ndarray:
+        """(N, len(self)) matrix with a single 1 per row, at the label's index."""
+        indices = [self.index(label) for label in labels]
+        return np.eye(len(self))[indices]
 
 
 def _normalise(label: str) -> str:
