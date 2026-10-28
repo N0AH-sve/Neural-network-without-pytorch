@@ -24,8 +24,8 @@ def train(args: Arguments) -> int:
     y = BASIC.one_hot(sample.label for sample in samples)
     network.train(x, y)
     accuracy = np.mean(network.forward(x).argmax(axis=1) == y.argmax(axis=1))
-    print(f"Number of boards : {len(samples)}, {accuracy:.1%} accuracy")
     _save(network, args.savefile or args.loadfile)
+    print(f"Number of boards : {len(samples)}, {accuracy:.1%} accuracy")
     return 0
 
 
