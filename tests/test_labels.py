@@ -1,3 +1,4 @@
+import numpy as np
 import pytest
 
 from my_torch.encoding.labels import BASIC, FULL, LabelSet
@@ -76,3 +77,28 @@ def test_full_keeps_colours_apart():
 def test_a_lone_colour_is_not_a_label():
     with pytest.raises(ValueError, match="unknown label"):
         BASIC.index("White")
+
+
+def test_one_hot_has_a_single_one_per_row():
+    y = FULL.one_hot(["Check Black", "Nothing", "Checkmate White"])
+    assert y.shape == (3, len(FULL))
+    assert np.array_equal(y.sum(axis=1), [1.0, 1.0, 1.0])
+    assert np.array_equal(y.argmax(axis=1), [2, 0, 3])
+
+
+def test_one_hot_uses_the_lookup_rules():
+    y = BASIC.one_hot(["checkmate BLACK", " Check  White "])
+    assert np.array_equal(y, [[0.0, 0.0, 1.0], [0.0, 1.0, 0.0]])
+
+
+def test_one_hot_accepts_a_generator():
+    assert BASIC.one_hot(label for label in ["Check", "Nothing"]).shape == (2, 3)
+
+
+def test_one_hot_of_nothing_is_an_empty_matrix():
+    assert BASIC.one_hot([]).shape == (0, 3)
+
+
+def test_one_hot_rejects_an_unknown_label():
+    with pytest.raises(ValueError, match="unknown label 'Stalemate'"):
+        BASIC.one_hot(["Check", "Stalemate"])
