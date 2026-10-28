@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from my_torch.encoding.features import INPUT_SIZE, encode
+from my_torch.encoding.features import INPUT_SIZE, encode, encode_all
 from my_torch.encoding.position import Position
 
 START = Position.from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
@@ -60,3 +60,23 @@ def test_other_fields_are_not_encoded():
     a = encode(Position.from_fen("r3k2r/8/8/8/8/8/8/R3K2R w KQkq - 0 1"))
     b = encode(Position.from_fen("r3k2r/8/8/8/8/8/8/R3K2R w - - 40 90"))
     assert np.array_equal(a, b)
+
+
+def test_encode_all_stacks_one_row_per_position():
+    positions = [
+        START,
+        Position.from_fen("4k3/8/8/8/8/8/8/4K3 b - -"),
+        Position.from_fen("k7/8/8/8/8/8/8/7K w - -"),
+    ]
+    x = encode_all(positions)
+    assert x.shape == (3, INPUT_SIZE)
+    for row, position in zip(x, positions, strict=True):
+        assert np.array_equal(row, encode(position))
+
+
+def test_encode_all_accepts_a_generator():
+    assert encode_all(START for _ in range(4)).shape == (4, INPUT_SIZE)
+
+
+def test_encode_all_of_nothing_is_an_empty_matrix():
+    assert encode_all([]).shape == (0, INPUT_SIZE)
