@@ -1,5 +1,7 @@
 """Positions turned into the input vector of the network."""
 
+from collections.abc import Iterable
+
 import numpy as np
 
 from my_torch.encoding.position import PIECES, Position
@@ -23,3 +25,9 @@ def encode(position: Position) -> np.ndarray:
                 x[_PLANE[square] * 64 + row * 8 + col] = 1.0
     x[-1] = float(position.side == "w")
     return x
+
+
+def encode_all(positions: Iterable[Position]) -> np.ndarray:
+    """Encode positions as the rows of an (N, INPUT_SIZE) matrix."""
+    rows = [encode(position) for position in positions]
+    return np.stack(rows) if rows else np.empty((0, INPUT_SIZE))
