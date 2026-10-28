@@ -19,6 +19,7 @@ class Neural_network_module:
         self.learning_rate = learning_rate
         self.seed = seed
         self.layers = self._init_layers(int_layers) if layers is None else layers
+        self.version = 1
 
 
     def _init_layers(self, int_layers : list[int]) -> list[Layer]:
@@ -46,7 +47,7 @@ class Neural_network_module:
 
     def to_dict(self) -> dict:
         return {
-            "version": FORMAT_VERSION,
+            "version": self.version,
             "hyperparameters": {
                 "epochs": self.epochs,
                 "learning_rate": self.learning_rate,
@@ -69,6 +70,24 @@ class Neural_network_module:
     def save(self, path : str) -> None:
         with open(path, "w") as file:
             json.dump(self.to_dict(), file)
+
+    @staticmethod
+    def _hyperparameters(raw : dict) -> dict:
+        """Hyperparameters of a file or config; absent ones fall back to the constants."""
+        hyper = raw.get("hyperparameters", {})
+        return {
+            "epochs": hyper.get("epochs", EPOCH),
+            "learning_rate": hyper.get("learning_rate", LEARNING_RATE),
+            "seed": hyper.get("seed", SEED),
+        }
+
+    @classmethod
+    def from_config(cls, conf : dict) -> "Neural_network_module":
+        """Build a freshly randomized network from a validated generator config."""
+        sizes, names = conf["layers"], conf["activations"]
+        layers = [Layer(sizes[i], sizes[i + 1], names[i])
+                  for i in range(len(sizes) - 1)]
+        return cls(layers=layers, **cls._hyperparameters(conf))
 
     @staticmethod
     def _layer_from_dict(index : int, raw : dict) -> Layer:
@@ -103,13 +122,7 @@ class Neural_network_module:
                 raise ValueError(f"layer {i} outputs {current.output} but "
                                  f"layer {i + 1} expects {following.input}")
 
-        hyper = raw.get("hyperparameters", {})
-        return cls(
-            epochs=hyper.get("epochs", EPOCH),
-            learning_rate=hyper.get("learning_rate", LEARNING_RATE),
-            seed=hyper.get("seed", SEED),
-            layers=layers,
-        )
+        return cls(layers=layers, **cls._hyperparameters(raw))
 
     def train(self, x, y):
         for _ in range(self.epochs):

@@ -139,7 +139,7 @@ def test_a_hyperparameter_present_in_the_file_wins_over_the_constant():
     ("bad_b_shape.nn", "b has shape"),
     ("bad_chaining.nn", "layer 0 outputs 3 but layer 1 expects 9"),
     ("unknown_activation.nn", "unknown activation"),
-    ("invalid_json.nn", ""),
+    ("invalid_json.nn", "Expecting value"),
 ])
 def test_a_broken_file_is_rejected(name, message):
     """Every rejection is a ValueError: JSONDecodeError is one too."""
