@@ -1,4 +1,6 @@
 import json
+import re
+from pathlib import Path
 
 import pytest
 
@@ -15,10 +17,16 @@ from my_torch.nn_module.neural_network_module import (
     Neural_network_module,
 )
 
+CONFIG_FILES = Path(__file__).resolve().parent.parent / "config_files"
+
 VALID_CONF = {
     "layers": [4, 3, 2],
     "activations": ["relu", "sigmoid"],
 }
+
+
+def fixture(name: str) -> str:
+    return str(CONFIG_FILES / name)
 
 
 def write_conf(tmp_path, conf, name="net.conf"):
@@ -317,3 +325,150 @@ def test_main_turns_a_bad_command_line_into_84(capsys):
 def test_main_prefixes_every_error_with_the_binary_name(tmp_path, capsys):
     assert main([str(tmp_path / "nope.conf"), "1"]) == 84
     assert capsys.readouterr().err.startswith("my_torch_generator: ")
+
+
+# --- configuration fixtures ------------------------------------------------
+
+@pytest.mark.parametrize("name", [
+    "valid.conf",
+    "valid_minimal.conf",
+    "valid_partial_hyperparameters.conf",
+    "valid_deep.conf",
+])
+def test_a_valid_fixture_is_accepted(name):
+    generator = Generator([fixture(name), "1"])
+    generator.check_conf(generator.get_conf(fixture(name)), fixture(name))
+
+
+@pytest.mark.parametrize("name, message", [
+    ("not_an_object.conf", "configuration must be an object"),
+    ("no_layers.conf", "missing key 'layers'"),
+    ("no_activations.conf", "missing key 'activations'"),
+    ("one_layer.conf", "at least 2 sizes"),
+    ("layers_not_a_list.conf", "at least 2 sizes"),
+    ("layer_size_not_an_integer.conf", "layer size 1 is not an integer"),
+    ("layer_size_not_positive.conf", "layer size 1 must be positive"),
+    ("activations_not_a_list.conf", "'activations' must be a list"),
+    ("too_few_activations.conf", "one per connection"),
+    ("unknown_activation.conf", "unknown activation"),
+    ("hyperparameters_not_an_object.conf", "'hyperparameters' must be an object"),
+    ("epochs_not_an_integer.conf", "'epochs' must be an integer"),
+    ("epochs_not_positive.conf", "'epochs' must be positive"),
+    ("seed_not_an_integer.conf", "'seed' must be an integer"),
+    ("learning_rate_not_a_number.conf", "'learning_rate' must be a number"),
+    ("learning_rate_not_positive.conf", "'learning_rate' must be positive"),
+    ("unknown_init.conf", "unknown init"),
+])
+def test_a_broken_fixture_is_rejected(name, message):
+    """Every rejection is a GeneratorError carrying a message that names the fault."""
+    generator = Generator([fixture(name), "1"])
+    with pytest.raises(GeneratorError, match=re.escape(message)):
+        generator.check_conf(generator.get_conf(fixture(name)), fixture(name))
+
+
+def test_the_invalid_json_fixture_is_rejected_by_get_conf():
+    """A file that is not JSON never reaches check_conf."""
+    generator = Generator([fixture("invalid_json.conf"), "1"])
+    with pytest.raises(GeneratorError, match="invalid JSON"):
+        generator.get_conf(fixture("invalid_json.conf"))
+
+
+def test_a_fixture_rejection_names_the_file():
+    generator = Generator([fixture("no_layers.conf"), "1"])
+    with pytest.raises(GeneratorError, match="no_layers.conf"):
+        generator.check_conf(generator.get_conf(fixture("no_layers.conf")),
+                             fixture("no_layers.conf"))
+
+
+# --- the fixtures, end to end through main ---------------------------------
+
+@pytest.mark.parametrize("name", [
+    "valid.conf",
+    "valid_minimal.conf",
+    "valid_partial_hyperparameters.conf",
+    "valid_deep.conf",
+])
+def test_main_generates_a_network_from_a_valid_fixture(name, tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    assert main([fixture(name), "1"]) == 0
+
+    produced = tmp_path / f"{Path(name).stem}_1.nn"
+    assert Neural_network_module.load(str(produced)) is not None
+
+
+@pytest.mark.parametrize("name", [
+    "invalid_json.conf",
+    "not_an_object.conf",
+    "no_layers.conf",
+    "no_activations.conf",
+    "one_layer.conf",
+    "layers_not_a_list.conf",
+    "layer_size_not_an_integer.conf",
+    "layer_size_not_positive.conf",
+    "activations_not_a_list.conf",
+    "too_few_activations.conf",
+    "unknown_activation.conf",
+    "hyperparameters_not_an_object.conf",
+    "epochs_not_an_integer.conf",
+    "epochs_not_positive.conf",
+    "seed_not_an_integer.conf",
+    "learning_rate_not_a_number.conf",
+    "learning_rate_not_positive.conf",
+    "unknown_init.conf",
+])
+def test_main_rejects_a_broken_fixture_without_writing_anything(name, tmp_path,
+                                                                monkeypatch,
+                                                                capsys):
+    monkeypatch.chdir(tmp_path)
+
+    assert main([fixture(name), "1"]) == 84
+    assert capsys.readouterr().err.startswith("my_torch_generator: ")
+    assert list(tmp_path.glob("*.nn")) == []
+
+
+def test_the_valid_fixture_carries_its_hyperparameters_into_the_network(tmp_path,
+                                                                       monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    assert main([fixture("valid.conf"), "1"]) == 0
+    net = Neural_network_module.load(str(tmp_path / "valid_1.nn"))
+
+    assert (net.epochs, net.learning_rate, net.seed) == (50, 0.01, 7)
+
+
+def test_the_minimal_fixture_falls_back_to_the_default_hyperparameters(tmp_path,
+                                                                      monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    assert main([fixture("valid_minimal.conf"), "1"]) == 0
+    net = Neural_network_module.load(str(tmp_path / "valid_minimal_1.nn"))
+
+    assert (net.epochs, net.learning_rate, net.seed) == (EPOCH, LEARNING_RATE, SEED)
+
+
+def test_a_hyperparameter_in_the_fixture_wins_over_the_constant(tmp_path,
+                                                                monkeypatch):
+    """valid_partial_hyperparameters.conf sets only the learning rate."""
+    monkeypatch.chdir(tmp_path)
+
+    assert main([fixture("valid_partial_hyperparameters.conf"), "1"]) == 0
+    net = Neural_network_module.load(
+        str(tmp_path / "valid_partial_hyperparameters_1.nn")
+    )
+
+    assert net.learning_rate == 0.2
+    assert (net.epochs, net.seed) == (EPOCH, SEED)
+
+
+def test_the_deep_fixture_produces_the_shape_it_describes(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+
+    assert main([fixture("valid_deep.conf"), "1"]) == 0
+    net = Neural_network_module.load(str(tmp_path / "valid_deep_1.nn"))
+
+    assert [layer.input for layer in net.layers] == [64, 32, 16, 8]
+    assert [layer.output for layer in net.layers] == [32, 16, 8, 1]
+    assert [layer.activation.name for layer in net.layers] == [
+        "relu", "relu", "tanh", "sigmoid",
+    ]
