@@ -2,6 +2,8 @@
 
 import os
 
+import numpy as np
+
 from my_torch.analyser.arguments import Arguments
 from my_torch.analyser.network import load_network
 from my_torch.encoding.chessfile import read_samples
@@ -21,6 +23,8 @@ def train(args: Arguments) -> int:
     x = encode_all(sample.position for sample in samples)
     y = BASIC.one_hot(sample.label for sample in samples)
     network.train(x, y)
+    accuracy = np.mean(network.forward(x).argmax(axis=1) == y.argmax(axis=1))
+    print(f"Number of boards : {len(samples)}, {accuracy:.1%} accuracy")
     _save(network, args.savefile or args.loadfile)
     return 0
 
