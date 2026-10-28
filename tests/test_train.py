@@ -92,3 +92,31 @@ def test_network_that_does_not_fit_is_rejected(tmp_path):
 def test_missing_chess_file(tmp_path, loadfile):
     with pytest.raises(OSError):
         train(Arguments("train", str(loadfile), str(tmp_path / "missing.txt")))
+
+
+def test_no_temporary_file_is_left(tmp_path, loadfile):
+    train(Arguments("train", str(loadfile), str(chessfile(tmp_path, TRAINING_LINES))))
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_a_crash_while_saving_keeps_loadfile(tmp_path, loadfile, monkeypatch):
+    """Simulate a save that dies halfway through writing."""
+    def broken_save(self, path):
+        with open(path, "w") as file:
+            file.write('{"version": 1, "data": {"lay')
+        raise OSError("disk full")
+
+    original = loadfile.read_bytes()
+    monkeypatch.setattr(Neural_network_module, "save", broken_save)
+    with pytest.raises(OSError, match="disk full"):
+        train(Arguments("train", str(loadfile), str(chessfile(tmp_path, TRAINING_LINES))))
+    assert loadfile.read_bytes() == original
+    assert not list(tmp_path.glob("*.tmp"))
+
+
+def test_savefile_in_a_missing_directory(tmp_path, loadfile):
+    savefile = tmp_path / "missing" / "out.nn"
+    with pytest.raises(OSError):
+        train(Arguments("train", str(loadfile), str(chessfile(tmp_path, TRAINING_LINES)),
+                        str(savefile)))
+    assert not savefile.parent.exists()
