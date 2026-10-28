@@ -7,6 +7,7 @@ from my_torch.encoding.chessfile import read_samples
 from my_torch.encoding.features import INPUT_SIZE, encode_all
 from my_torch.encoding.labels import BASIC
 from my_torch.encoding.position import FenError
+from my_torch.nn_module.layer import Layer
 from my_torch.nn_module.neural_network_module import Neural_network_module
 
 TRAINING_LINES = [
@@ -120,3 +121,34 @@ def test_savefile_in_a_missing_directory(tmp_path, loadfile):
         train(Arguments("train", str(loadfile), str(chessfile(tmp_path, TRAINING_LINES)),
                         str(savefile)))
     assert not savefile.parent.exists()
+
+
+@pytest.fixture
+def always_nothing(tmp_path):
+    """A network that answers Nothing to every board, and that a learning rate
+    of 0 keeps that way: its accuracy is known in advance."""
+    layer = Layer(INPUT_SIZE, len(BASIC), "linear",
+                  w=np.zeros((INPUT_SIZE, len(BASIC))), b=[1.0, 0.0, 0.0])
+    path = tmp_path / "nothing.nn"
+    Neural_network_module(layers=[layer], epochs=1, learning_rate=0.0).save(str(path))
+    return path
+
+
+def test_report_gives_the_boards_and_the_accuracy(tmp_path, always_nothing, capsys):
+    """1 board out of 3 is Nothing."""
+    train(Arguments("train", str(always_nothing), str(chessfile(tmp_path, TRAINING_LINES))))
+    assert capsys.readouterr().out == "Number of boards : 3, 33.3% accuracy\n"
+
+
+def test_no_report_when_the_save_fails(tmp_path, always_nothing, capsys):
+    savefile = tmp_path / "missing" / "out.nn"
+    with pytest.raises(OSError):
+        train(Arguments("train", str(always_nothing),
+                        str(chessfile(tmp_path, TRAINING_LINES)), str(savefile)))
+    assert capsys.readouterr().out == ""
+
+
+def test_no_report_for_a_bad_chess_file(tmp_path, always_nothing, capsys):
+    with pytest.raises(ValueError):
+        train(Arguments("train", str(always_nothing), str(chessfile(tmp_path, []))))
+    assert capsys.readouterr().out == ""
