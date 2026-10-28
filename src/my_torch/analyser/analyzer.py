@@ -2,6 +2,8 @@
 
 import sys
 
+from my_torch.analyser.predict import Predict
+
 USAGE = """USAGE
     ./my_torch_analyzer [--predict | --train [--save SAVEFILE]] LOADFILE CHESSFILE
 
@@ -27,7 +29,10 @@ class AnalyzerError(ValueError):
 
 class Analyzer:
     def __init__(self, argv: list[str]):
-        self.loadfile, self.chessfile = self.parse_args(argv)
+        self.command = Predict(*self.parse_args(argv))
+
+    def run(self) -> int:
+        return self.command.run()
 
     @staticmethod
     def parse_args(argv: list[str]) -> tuple[str, str]:
@@ -58,9 +63,10 @@ def run(argv: list[str]) -> int:
     if "--help" in argv or "-h" in argv:
         print(USAGE)
         return 0
-
-    print(USAGE, file=sys.stderr)
-    return 84
+    if not argv:
+        print(USAGE, file=sys.stderr)
+        return 84
+    return Analyzer(argv).run()
 
 
 def main(argv: list[str] | None = None) -> int:
