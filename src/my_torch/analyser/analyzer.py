@@ -2,6 +2,10 @@
 
 import sys
 
+from my_torch.analyser.arguments import parse_args
+from my_torch.analyser.predict import Predict
+from my_torch.analyser.train import train
+
 USAGE = """USAGE
     ./my_torch_analyzer [--predict | --train [--save SAVEFILE]] LOADFILE CHESSFILE
 
@@ -23,9 +27,14 @@ def run(argv: list[str]) -> int:
     if "--help" in argv or "-h" in argv:
         print(USAGE)
         return 0
+    if not argv:
+        print(USAGE, file=sys.stderr)
+        return 84
 
-    print(USAGE, file=sys.stderr)
-    return 84
+    args = parse_args(argv)
+    if args.mode == "train":
+        return train(args)
+    return Predict(args.loadfile, args.chessfile).run()
 
 
 def main(argv: list[str] | None = None) -> int:
