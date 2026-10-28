@@ -27,14 +27,20 @@ def parse_line(line: str) -> Sample:
     return Sample(position, " ".join(tokens[end:]) or None)
 
 
-def read_samples(lines: Iterable[str]) -> list[Sample]:
-    """Parse every non-blank line, e.g. of an open chess file."""
+def read_samples(lines: Iterable[str], *, require_labels: bool = False) -> list[Sample]:
+    """Parse every non-blank line, e.g. of an open chess file.
+
+    With require_labels, as in train mode, a line without a label is an error.
+    """
     samples = []
     for number, line in enumerate(lines, start=1):
         if not line.strip():
             continue
         try:
-            samples.append(parse_line(line))
+            sample = parse_line(line)
         except FenError as error:
             raise FenError(f"line {number}: {error}") from error
+        if require_labels and sample.label is None:
+            raise FenError(f"line {number}: missing the expected output")
+        samples.append(sample)
     return samples

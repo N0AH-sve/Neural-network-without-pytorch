@@ -4,9 +4,14 @@
 .
 ├── Makefile                      build rules (all, install, run, tests_run, clean, fclean, re)
 ├── pyproject.toml                project metadata and dependencies (uv)
+├── config_files/                 example .conf files, valid and broken, for the generator tests
 ├── loading_files/                example .nn files, valid and broken, for the save / load tests
 ├── src/my_torch/
-│   ├── analyser/analyzer.py      entry point of my_torch_analyzer
+│   ├── analyser/                 my_torch_analyzer
+│   │   ├── analyzer.py           entry point: --help, then dispatch on the mode
+│   │   ├── arguments.py          command line → Arguments (mode, files)
+│   │   ├── network.py            load a .nn file and check it fits the encoding
+│   │   └── train.py              --train
 │   ├── generator/generator.py    entry point of my_torch_generator
 │   ├── nn_module/                generic neural network module
 │   │   ├── activations.py        linear, sigmoid, tanh, relu and their derivatives
@@ -30,27 +35,30 @@ module; everything chess-specific lives in `encoding`.
 
 | Step | Code | Result | Status |
 | --- | --- | --- | --- |
-| 1. Load the network | `Neural_network_module.load(loadfile)` | network | done |
+| 1. Load the network | `analyser.network.load_network(loadfile)` | network with 769 inputs, 3 outputs | done |
 | 2. Read the file | `chessfile.read_samples(file)` | `list[Sample]` | done |
 | 3. Encode the boards | `features.encode_all(s.position for s in samples)` | `X`, shape `(N, 769)` | done |
-| 4. Run the network | `network.forward(X)` | scores, shape `(N, classes)` | done |
-| 5. Pick each answer | `argmax` per row, then `LabelSet.label(i)` | one label per line on stdout | to do |
+| 4. Run the network | `network.forward(X)` | scores, shape `(N, 3)` | done |
+| 5. Pick each answer | `argmax` per row, then `BASIC.label(i)` | one label per line on stdout | to do |
+
+The pieces exist; `--predict` itself is not wired yet.
 
 **Train mode** — every line must have a label:
 
 | Step | Code | Result | Status |
 | --- | --- | --- | --- |
-| 1. Load the network | `Neural_network_module.load(loadfile)` | network | done |
-| 2. Read the file | `chessfile.read_samples(file)` | `list[Sample]` | done |
+| 1. Load the network | `analyser.network.load_network(loadfile)` | network with 769 inputs, 3 outputs | done |
+| 2. Read the file | `chessfile.read_samples(file, require_labels=True)` | `list[Sample]` | done |
 | 3. Encode the boards | `features.encode_all(s.position for s in samples)` | `X`, shape `(N, 769)` | done |
-| 4. Encode the labels | `LabelSet.one_hot(s.label for s in samples)` | `Y`, shape `(N, classes)` | done |
-| 5. Run the network | `network.forward(X)` | scores, shape `(N, classes)` | done |
+| 4. Encode the labels | `BASIC.one_hot(s.label for s in samples)` | `Y`, shape `(N, 3)` | done |
+| 5. Run the network | `network.forward(X)`, inside `network.train` | scores, shape `(N, 3)` | done |
 | 6. Compare with `Y` | loss on scores and `Y` | gradient of the loss | MSE inline in `train`; `losses.py` to do |
 | 7. Learn | `network.backward(gradient)`, `network.update(learning_rate)` | new weights and biases | done |
-| 8. Save | `network.save(savefile or loadfile)` | `.nn` file (JSON) | done |
+| 8. Save | written to `<path>.tmp`, then `os.replace` | `.nn` file (JSON) in `SAVEFILE` or `LOADFILE` | done |
+| 9. Report | accuracy on the training boards | one line on stdout | done |
 
-`Y` is never fed to the network: it is only compared with the network's output
-in step 6. The analyzer itself is not wired to these steps yet.
+All of it runs in `analyser/train.py`. `Y` is never fed to the network: it is
+only compared with the network's output in step 6.
 
 ## Input encoding
 
@@ -86,11 +94,14 @@ The classes are a `labels.LabelSet`, in the order of the output neurons:
 `BASIC` (`Nothing`, `Check`, `Checkmate`) or `FULL` (with the colour of the side
 giving check or mate). See [formats.md](formats.md#label).
 
+The network only outputs one score per class and knows nothing about their
+meaning: the analyzer translates them with `BASIC`, the set the subject
+requires, and refuses a network without exactly 3 outputs.
+
 ## Planned modules
 
 - `nn_module/losses.py` — MSE, softmax + cross entropy.
-- Store the `LabelSet` classes in the `.nn` file, so a loaded network knows
-  which class each output neuron stands for (step 5 of predict mode needs it).
+- `--predict` in the analyzer.
 
 ## Design notes
 
