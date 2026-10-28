@@ -1,8 +1,9 @@
 """Lines of a chess file: a FEN board, optionally followed by its label."""
 
+from collections.abc import Iterable
 from dataclasses import dataclass
 
-from my_torch.encoding.position import Position
+from my_torch.encoding.position import FenError, Position
 
 
 @dataclass(frozen=True)
@@ -24,3 +25,16 @@ def parse_line(line: str) -> Sample:
     )
     position = Position.from_fen(" ".join(tokens[:end]))
     return Sample(position, " ".join(tokens[end:]) or None)
+
+
+def read_samples(lines: Iterable[str]) -> list[Sample]:
+    """Parse every non-blank line, e.g. of an open chess file."""
+    samples = []
+    for number, line in enumerate(lines, start=1):
+        if not line.strip():
+            continue
+        try:
+            samples.append(parse_line(line))
+        except FenError as error:
+            raise FenError(f"line {number}: {error}") from error
+    return samples
