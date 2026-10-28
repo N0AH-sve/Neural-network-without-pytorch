@@ -4,13 +4,14 @@
 .
 ├── Makefile                      build rules (all, install, run, tests_run, clean, fclean, re)
 ├── pyproject.toml                project metadata and dependencies (uv)
+├── loading_files/                example .nn files, valid and broken, for the save / load tests
 ├── src/my_torch/
 │   ├── analyser/analyzer.py      entry point of my_torch_analyzer
 │   ├── generator/generator.py    entry point of my_torch_generator
 │   ├── nn_module/                generic neural network module
 │   │   ├── activations.py        linear, sigmoid, tanh, relu and their derivatives
 │   │   ├── layer.py              dense layer: forward, backward, update
-│   │   └── neural_network_module.py  network: layers, training loop
+│   │   └── neural_network_module.py  network: training, save / load (JSON)
 │   └── encoding/                 chess-specific input / output encoding
 │       ├── position.py           FEN string → Position (parsing and validation)
 │       ├── chessfile.py          chess file line → Sample (position + label)
@@ -29,25 +30,27 @@ module; everything chess-specific lives in `encoding`.
 
 | Step | Code | Result | Status |
 | --- | --- | --- | --- |
-| 1. Read the file | `chessfile.read_samples(file)` | `list[Sample]` | done |
-| 2. Encode the boards | `features.encode_all(s.position for s in samples)` | `X`, shape `(N, 769)` | done |
-| 3. Run the network | `network.forward(X)` | scores, shape `(N, classes)` | done |
-| 4. Pick each answer | `argmax` per row, then `LabelSet.label(i)` | one label per line on stdout | to do |
+| 1. Load the network | `Neural_network_module.load(loadfile)` | network | done |
+| 2. Read the file | `chessfile.read_samples(file)` | `list[Sample]` | done |
+| 3. Encode the boards | `features.encode_all(s.position for s in samples)` | `X`, shape `(N, 769)` | done |
+| 4. Run the network | `network.forward(X)` | scores, shape `(N, classes)` | done |
+| 5. Pick each answer | `argmax` per row, then `LabelSet.label(i)` | one label per line on stdout | to do |
 
 **Train mode** — every line must have a label:
 
 | Step | Code | Result | Status |
 | --- | --- | --- | --- |
-| 1. Read the file | `chessfile.read_samples(file)` | `list[Sample]` | done |
-| 2. Encode the boards | `features.encode_all(s.position for s in samples)` | `X`, shape `(N, 769)` | done |
-| 3. Encode the labels | `LabelSet.one_hot(s.label for s in samples)` | `Y`, shape `(N, classes)` | done |
-| 4. Run the network | `network.forward(X)` | scores, shape `(N, classes)` | done |
-| 5. Compare with `Y` | loss on scores and `Y` | gradient of the loss | MSE inline in `train`; `losses.py` to do |
-| 6. Learn | `network.backward(gradient)`, `network.update(lr)` | new weights and biases | done |
-| 7. Save | write the network | `.nn` file | to do |
+| 1. Load the network | `Neural_network_module.load(loadfile)` | network | done |
+| 2. Read the file | `chessfile.read_samples(file)` | `list[Sample]` | done |
+| 3. Encode the boards | `features.encode_all(s.position for s in samples)` | `X`, shape `(N, 769)` | done |
+| 4. Encode the labels | `LabelSet.one_hot(s.label for s in samples)` | `Y`, shape `(N, classes)` | done |
+| 5. Run the network | `network.forward(X)` | scores, shape `(N, classes)` | done |
+| 6. Compare with `Y` | loss on scores and `Y` | gradient of the loss | MSE inline in `train`; `losses.py` to do |
+| 7. Learn | `network.backward(gradient)`, `network.update(learning_rate)` | new weights and biases | done |
+| 8. Save | `network.save(savefile or loadfile)` | `.nn` file (JSON) | done |
 
 `Y` is never fed to the network: it is only compared with the network's output
-in step 5. The analyzer itself is not wired to these steps yet.
+in step 6. The analyzer itself is not wired to these steps yet.
 
 ## Input encoding
 
@@ -86,7 +89,8 @@ giving check or mate). See [formats.md](formats.md#label).
 ## Planned modules
 
 - `nn_module/losses.py` — MSE, softmax + cross entropy.
-- Save / load of a network in the `.nn` format, storing its label set.
+- Store the `LabelSet` classes in the `.nn` file, so a loaded network knows
+  which class each output neuron stands for (step 5 of predict mode needs it).
 
 ## Design notes
 
