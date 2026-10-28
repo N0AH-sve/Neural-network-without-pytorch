@@ -4,24 +4,29 @@
 .
 ├── Makefile                      build rules (all, install, run, tests_run, clean, fclean, re)
 ├── pyproject.toml                project metadata and dependencies (uv)
+├── chess_files/                  example chess files, valid and broken, for the analyzer tests
 ├── config_files/                 example .conf files, valid and broken, for the generator tests
+├── dataset/                      training boards by class, not versioned; mixed/ = shuffled split
 ├── loading_files/                example .nn files, valid and broken, for the save / load tests
 ├── src/my_torch/
 │   ├── analyser/                 my_torch_analyzer
 │   │   ├── analyzer.py           entry point: --help, then dispatch on the mode
 │   │   ├── arguments.py          command line → Arguments (mode, files)
 │   │   ├── network.py            load a .nn file and check it fits the encoding
+│   │   ├── predict.py            --predict
 │   │   └── train.py              --train
 │   ├── generator/generator.py    entry point of my_torch_generator
 │   ├── nn_module/                generic neural network module
 │   │   ├── activations.py        linear, sigmoid, tanh, relu and their derivatives
 │   │   ├── layer.py              dense layer: forward, backward, update
 │   │   └── neural_network_module.py  network: training, save / load (JSON)
-│   └── encoding/                 chess-specific input / output encoding
-│       ├── position.py           FEN string → Position (parsing and validation)
-│       ├── chessfile.py          chess file line → Sample (position + label)
-│       ├── features.py           Position → 769-value input vector
-│       └── labels.py             label ⇄ output neuron, one-hot targets
+│   ├── encoding/                 chess-specific input / output encoding
+│   │   ├── position.py           FEN string → Position (parsing and validation)
+│   │   ├── chessfile.py          chess file line → Sample (position + label)
+│   │   ├── features.py           Position → 769-value input vector
+│   │   └── labels.py             label ⇄ output neuron, one-hot targets
+│   └── tools/
+│       └── shuffle_dataset.py    mix, deduplicate, shuffle and split chess files
 ├── tests/                        test suite (pytest), one file per module
 └── docs/                         this documentation
 ```
@@ -35,13 +40,15 @@ module; everything chess-specific lives in `encoding`.
 
 | Step | Code | Result | Status |
 | --- | --- | --- | --- |
-| 1. Load the network | `analyser.network.load_network(loadfile)` | network with 769 inputs, 3 outputs | done |
-| 2. Read the file | `chessfile.read_samples(file)` | `list[Sample]` | done |
-| 3. Encode the boards | `features.encode_all(s.position for s in samples)` | `X`, shape `(N, 769)` | done |
-| 4. Run the network | `network.forward(X)` | scores, shape `(N, 3)` | done |
-| 5. Pick each answer | `argmax` per row, then `BASIC.label(i)` | one label per line on stdout | to do |
+| 1. Load the network | `Neural_network_module.load(loadfile)`, input size checked | network with 769 inputs | done |
+| 2. Pick the label set | `Predict.label_set_of`: 3 outputs → `BASIC`, 5 → `FULL` | `LabelSet` | done |
+| 3. Read the file | `chessfile.read_samples(file)` | `list[Sample]` | done |
+| 4. Encode the boards | `features.encode_all(s.position for s in samples)` | `X`, shape `(N, 769)` | done |
+| 5. Run the network | `network.forward(X)` | scores, shape `(N, classes)` | done |
+| 6. Pick each answer | `argmax` per row, then `labels.label(i)` | one label per line on stdout | done |
 
-The pieces exist; `--predict` itself is not wired yet.
+All of it runs in `analyser/predict.py`. The whole file is read before the
+first prediction is printed, so a broken board never leaves a truncated list.
 
 **Train mode** — every line must have a label:
 
@@ -95,13 +102,16 @@ The classes are a `labels.LabelSet`, in the order of the output neurons:
 giving check or mate). See [formats.md](formats.md#label).
 
 The network only outputs one score per class and knows nothing about their
-meaning: the analyzer translates them with `BASIC`, the set the subject
-requires, and refuses a network without exactly 3 outputs.
+meaning: the analyzer translates them. `--train` uses `BASIC`, the set the
+subject requires, and refuses a network without exactly 3 outputs; `--predict`
+picks `BASIC` or `FULL` from the number of outputs (3 or 5).
 
 ## Planned modules
 
 - `nn_module/losses.py` — MSE, softmax + cross entropy.
-- `--predict` in the analyzer.
+- One loading rule for both modes: `--predict` checks the network itself and
+  accepts 3 or 5 outputs, `--train` uses `analyser.network.load_network` and
+  accepts 3 only.
 
 ## Design notes
 
