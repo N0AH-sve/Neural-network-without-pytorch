@@ -1,6 +1,6 @@
 import pytest
 
-from my_torch.encoding.labels import LabelSet
+from my_torch.encoding.labels import BASIC, FULL, LabelSet
 
 CLASSES = ["Nothing", "Check White", "Checkmate Black"]
 
@@ -39,3 +39,40 @@ def test_unknown_label_lists_the_valid_ones(labels, label):
 def test_duplicate_classes_are_rejected():
     with pytest.raises(ValueError, match="duplicate class"):
         LabelSet(["Check", "check"])
+
+
+def test_presets():
+    assert BASIC.classes == ("Nothing", "Check", "Checkmate")
+    assert FULL.classes == (
+        "Nothing", "Check White", "Check Black", "Checkmate White", "Checkmate Black",
+    )
+    assert not BASIC.coloured
+    assert FULL.coloured
+
+
+@pytest.mark.parametrize("label, index", [
+    ("Nothing", 0),
+    ("Check", 1),
+    ("Check White", 1),
+    ("check  black", 1),
+    ("Checkmate", 2),
+    ("Checkmate White", 2),
+    ("Checkmate Black", 2),
+])
+def test_basic_ignores_the_colour(label, index):
+    assert BASIC.index(label) == index
+
+
+@pytest.mark.parametrize("label", ["Check", "Checkmate"])
+def test_full_requires_the_colour(label):
+    with pytest.raises(ValueError, match="unknown label"):
+        FULL.index(label)
+
+
+def test_full_keeps_colours_apart():
+    assert FULL.index("Checkmate White") != FULL.index("Checkmate Black")
+
+
+def test_a_lone_colour_is_not_a_label():
+    with pytest.raises(ValueError, match="unknown label"):
+        BASIC.index("White")
