@@ -58,14 +58,16 @@ first prediction is printed, so a broken board never leaves a truncated list.
 | 2. Read the file | `chessfile.read_samples(file, require_labels=True)` | `list[Sample]` | done |
 | 3. Encode the boards | `features.encode_all(s.position for s in samples)` | `X`, shape `(N, 769)`, booleans | done |
 | 4. Encode the labels | `BASIC.one_hot(s.label for s in samples)` | `Y`, shape `(N, 3)` | done |
-| 5. Run the network | `network.forward(X[batch])`, inside `network.train`, on shuffled batches of `batch_size` boards | scores, shape `(batch_size, 3)` | done |
-| 6. Compare with `Y` | loss on scores and `Y[batch]` | gradient of the loss | MSE inline in `train`; `losses.py` to do |
-| 7. Learn | `network.backward(gradient)`, `network.update(learning_rate)`, after every batch | new weights and biases | done |
-| 8. Save | written to `<path>.tmp`, then `os.replace` | `.nn` file (JSON) in `SAVEFILE` or `LOADFILE` | done |
-| 9. Report | accuracy on the training boards, with `network.forward_in_batches` | one line on stdout | done |
+| 5. Hold out validation | `validation_split` of the boards, drawn once from `seed`, inside `network.train` | training and validation indices | done |
+| 6. Run the network | `network.forward(X[batch])`, inside `network.train`, on shuffled batches of `batch_size` boards | scores, shape `(batch_size, 3)` | done |
+| 7. Compare with `Y` | loss on scores and `Y[batch]` | gradient of the loss | mean squared error (`_mean_squared_error`); softmax + cross-entropy to do |
+| 8. Learn | `network.backward(gradient)`, `network.update(learning_rate)`, after every batch | new weights and biases | done |
+| 9. Validate and maybe stop | after every epoch: validation loss and accuracy; stop after `patience` epochs without improvement, then restore the best epoch's weights | `TrainingHistory`, with `best` the kept epoch | done |
+| 10. Save | written to `<path>.tmp`, then `os.replace` | `.nn` file (JSON) in `SAVEFILE` or `LOADFILE` | done |
+| 11. Report | one line per epoch while training (`on_epoch`), then the kept epoch and its validation accuracy | stdout | done |
 
 All of it runs in `analyser/train.py`. `Y` is never fed to the network: it is
-only compared with the network's output in step 6.
+only compared with the network's output in step 7.
 
 ## Input encoding
 

@@ -20,22 +20,38 @@ Options may come before or after the two files; the first file is always
 
 ```sh
 $> ./my_torch_analyzer --train --save trained.nn my_torch_network.nn boards.txt
-Number of boards : 3, 100.0% accuracy
+epoch 1/30: loss 0.2275, validation loss 0.2174, validation accuracy 42.0%
+...
+epoch 22/30: loss 0.1646, validation loss 0.1944, validation accuracy 52.6%
+epoch 23/30: loss 0.1621, validation loss 0.1945, validation accuracy 52.5%
+epoch 24/30: loss 0.1596, validation loss 0.1951, validation accuracy 52.8%
+epoch 25/30: loss 0.1574, validation loss 0.1951, validation accuracy 52.9%
+Number of boards : 20000, kept epoch 22 of 25, 52.6% validation accuracy
 ```
 
 1. `LOADFILE` is loaded and must take 769 inputs (one encoded board) and give
    3 outputs (`Nothing`, `Check`, `Checkmate`).
 2. Every line of `CHESSFILE` must have its expected output.
-3. The network is trained with the hyperparameters stored in `LOADFILE`
-   (see [formats.md](formats.md#hyperparameters)): at each epoch the boards are
-   shuffled, then the weights are updated after every `batch_size` boards. The
-   shuffle follows `seed`, so the same `LOADFILE` trained on the same file
-   always gives the same network.
-4. It is saved in `SAVEFILE`, or back in `LOADFILE`. The file is written to
+3. `validation_split` of the boards (20% by default) is kept aside and never
+   trained on.
+4. The network is trained on the other boards with the hyperparameters stored
+   in `LOADFILE` (see [formats.md](formats.md#hyperparameters)): at each epoch
+   the boards are shuffled, then the weights are updated after every
+   `batch_size` boards. One line per epoch gives the training loss and the
+   validation loss and accuracy.
+5. Training stops early once the validation loss has not improved for
+   `patience` epochs, and the weights of the best epoch are kept: the epochs
+   after it only learned the training boards by heart. This is how training
+   avoids overfitting.
+6. It is saved in `SAVEFILE`, or back in `LOADFILE`. The file is written to
    `<path>.tmp` then renamed, so a crash never leaves a half-written network.
-5. The number of boards and the accuracy are printed once the save succeeded.
-   This accuracy is measured on the training boards themselves: it shows the
-   network learned them, not that it generalises.
+7. Once the save succeeded, the last line gives the kept epoch and its
+   validation accuracy: how the network does on boards it never learned from.
+   With `validation_split` set to `0`, it gives the accuracy on the training
+   boards instead, marked `(no validation)`.
+
+Everything random follows `seed`, so the same `LOADFILE` trained on the same
+file always gives the same network.
 
 On any error, nothing is saved and `LOADFILE` is left untouched.
 
