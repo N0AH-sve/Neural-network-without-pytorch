@@ -137,7 +137,7 @@ def always_nothing(tmp_path):
 def test_report_gives_the_boards_and_the_accuracy(tmp_path, always_nothing, capsys):
     """1 board out of 3 is Nothing."""
     train(Arguments("train", str(always_nothing), str(chessfile(tmp_path, TRAINING_LINES))))
-    assert capsys.readouterr().out == "Number of boards : 3, 33.3% accuracy\n"
+    assert capsys.readouterr().out.splitlines()[-1] == "Number of boards : 3, 33.3% accuracy"
 
 
 def test_no_report_when_the_save_fails(tmp_path, always_nothing, capsys):
@@ -145,7 +145,7 @@ def test_no_report_when_the_save_fails(tmp_path, always_nothing, capsys):
     with pytest.raises(OSError):
         train(Arguments("train", str(always_nothing),
                         str(chessfile(tmp_path, TRAINING_LINES)), str(savefile)))
-    assert capsys.readouterr().out == ""
+    assert "Number of boards" not in capsys.readouterr().out
 
 
 def test_no_report_for_a_bad_chess_file(tmp_path, always_nothing, capsys):

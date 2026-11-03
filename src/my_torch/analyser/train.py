@@ -9,7 +9,7 @@ from my_torch.analyser.network import load_network
 from my_torch.encoding.chessfile import read_samples
 from my_torch.encoding.features import encode_all
 from my_torch.encoding.labels import BASIC
-from my_torch.nn_module.neural_network_module import Neural_network_module
+from my_torch.nn_module.neural_network_module import EpochMetrics, Neural_network_module
 
 
 def train(args: Arguments) -> int:
@@ -22,11 +22,20 @@ def train(args: Arguments) -> int:
         raise ValueError(f"{args.chessfile}: no board to train on")
     x = encode_all(sample.position for sample in samples)
     y = BASIC.one_hot(sample.label for sample in samples)
-    network.train(x, y)
+    network.train(x, y, on_epoch=lambda metrics: _print_epoch(metrics, network.epochs))
     accuracy = np.mean(network.forward_in_batches(x).argmax(axis=1) == y.argmax(axis=1))
     _save(network, args.savefile or args.loadfile)
     print(f"Number of boards : {len(samples)}, {accuracy:.1%} accuracy")
     return 0
+
+
+def _print_epoch(metrics: EpochMetrics, epochs: int) -> None:
+    """One line per epoch, flushed at once so a pipe sees it live."""
+    line = f"epoch {metrics.epoch}/{epochs}: loss {metrics.loss:.4f}"
+    if metrics.validation_loss is not None:
+        line += (f", validation loss {metrics.validation_loss:.4f}"
+                 f", validation accuracy {metrics.validation_accuracy:.1%}")
+    print(line, flush=True)
 
 
 def _save(network: Neural_network_module, path: str) -> None:
