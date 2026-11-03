@@ -142,7 +142,7 @@ def script(net, validation_losses):
         return 1.0
 
     net._train_epoch = train_epoch
-    net._validate = lambda x, y: (next(losses), 0.5)
+    net._validate = lambda x, y: {"validation_loss": next(losses), "validation_accuracy": 0.5}
 
 
 def kept_epoch(net):

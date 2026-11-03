@@ -14,6 +14,10 @@ PATIENCE = 3
 SEED = 42 # everyone have 42 <
 FORMAT_VERSION = 1
 
+def _mean_squared_error(output, target) -> float:
+    return float(np.mean((output - target) ** 2))
+
+
 @dataclass(frozen=True)
 class EpochMetrics:
     """What one training epoch measured; validation fields are None without
@@ -220,10 +224,11 @@ class Neural_network_module:
         history = TrainingHistory()
         for epoch in range(1, self.epochs + 1):
             loss = self._train_epoch(x, y, rng.permutation(training))
-            history.append(EpochMetrics(epoch, loss, *self._validate(x_validation, y_validation)))
+            metrics = EpochMetrics(epoch, loss, **self._validate(x_validation, y_validation))
+            history.append(metrics)
             if on_epoch is not None:
-                on_epoch(history[-1])
-            if stopping.record(history[-1], self.layers):
+                on_epoch(metrics)
+            if stopping.record(metrics, self.layers):
                 break
         stopping.restore(self.layers)
         history.best = stopping.best
@@ -238,26 +243,28 @@ class Neural_network_module:
 
     def _train_epoch(self, x, y, order : np.ndarray) -> float:
         """One update per batch of batch_size samples, taken in the given
-        order; returns the mean squared error over the epoch."""
-        squared_error = 0.0
-        for start in range(0, len(order), self.batch_size):
-            batch = order[start:start + self.batch_size]
-            squared_error += self._step(x[batch], y[batch])
-        return squared_error / max(1, len(order) * self.layers[-1].output)
+        order; returns the epoch's loss, each batch weighing by its size."""
+        batches = [order[start:start + self.batch_size]
+                   for start in range(0, len(order), self.batch_size)]
+        losses = [self._step(x[batch], y[batch]) for batch in batches]
+        return float(np.average(losses, weights=[len(b) for b in batches])) if batches else 0.0
 
     def _step(self, x, y) -> float:
-        """Forward, backward and update on one batch; returns its summed squared error."""
-        error = self.forward(x) - y
-        self.backward(error / len(x))
+        """Forward, backward and update on one batch; returns its loss."""
+        output = self.forward(x)
+        self.backward((output - y) / len(x))
         self.update(self.learning_rate)
-        return float(np.sum(error ** 2))
+        return _mean_squared_error(output, y)
 
-    def _validate(self, x, y) -> tuple[float | None, float | None]:
-        """Mean squared error and accuracy on samples never trained on. The
-        accuracy is the share of samples whose largest output is where the
-        target is largest, which is meaningful for one-hot targets."""
+    def _validate(self, x, y) -> dict:
+        """The validation fields of EpochMetrics, measured on samples never
+        trained on; none without such samples. The accuracy is the share of
+        samples whose largest output is where the target is largest, which is
+        meaningful for one-hot targets."""
         if len(x) == 0:
-            return None, None
+            return {}
         output = self.forward_in_batches(x)
-        accuracy = float(np.mean(output.argmax(axis=1) == y.argmax(axis=1)))
-        return float(np.mean((output - y) ** 2)), accuracy
+        return {
+            "validation_loss": _mean_squared_error(output, y),
+            "validation_accuracy": float(np.mean(output.argmax(axis=1) == y.argmax(axis=1))),
+        }
