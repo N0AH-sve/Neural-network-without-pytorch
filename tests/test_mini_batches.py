@@ -122,3 +122,34 @@ def test_training_lowers_the_loss():
     before = np.mean((net.forward(x) - y) ** 2)
     net.train(x, y)
     assert np.mean((net.forward(x) - y) ** 2) < before / 10
+
+
+@pytest.mark.parametrize("n_samples, batch_size", [
+    (10, 4),      # last slice smaller
+    (10, 5),      # slices fit exactly
+    (10, 4096),   # one slice
+    (1, 1),
+])
+def test_forward_in_batches_equals_forward(n_samples, batch_size):
+    x = np.random.default_rng(3).normal(size=(n_samples, 4))
+    net = network()
+    assert np.allclose(net.forward_in_batches(x, batch_size), net.forward(x))
+
+
+def test_forward_in_batches_keeps_the_order(data):
+    x, _ = data
+    net = network()
+    batches = record_batches(net)
+    net.forward_in_batches(x, batch_size=3)
+    assert [i for batch in batches for i in batch] == list(range(N_SAMPLES))
+    assert [len(batch) for batch in batches] == [3, 3, 3, 1]
+
+
+def test_forward_in_batches_of_nothing():
+    assert network().forward_in_batches(np.empty((0, 4))).shape == (0, 2)
+
+
+def test_forward_in_batches_reads_booleans():
+    x = np.random.default_rng(4).random((9, 4)) < 0.5
+    net = network()
+    assert np.allclose(net.forward_in_batches(x, 2), net.forward(x.astype(float)))
