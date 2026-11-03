@@ -9,7 +9,11 @@ from my_torch.analyser.network import load_network
 from my_torch.encoding.chessfile import read_samples
 from my_torch.encoding.features import encode_all
 from my_torch.encoding.labels import BASIC
-from my_torch.nn_module.neural_network_module import EpochMetrics, Neural_network_module
+from my_torch.nn_module.neural_network_module import (
+    EpochMetrics,
+    Neural_network_module,
+    TrainingHistory,
+)
 
 
 def train(args: Arguments) -> int:
@@ -29,15 +33,13 @@ def train(args: Arguments) -> int:
     return 0
 
 
-def _summary(network: Neural_network_module, history: list[EpochMetrics], x, y) -> str:
+def _summary(network: Neural_network_module, history: TrainingHistory, x, y) -> str:
     """How good the saved network is. With validation, its accuracy on boards
     it never trained on; without, only its accuracy on the training boards,
     which cannot tell learning from learning by heart."""
-    validated = [metrics for metrics in history if metrics.validation_loss is not None]
-    if validated:
-        best = min(validated, key=lambda metrics: metrics.validation_loss)
-        return (f"kept epoch {best.epoch} of {len(history)}, "
-                f"{best.validation_accuracy:.1%} validation accuracy")
+    if history.best is not None:
+        return (f"kept epoch {history.best.epoch} of {len(history)}, "
+                f"{history.best.validation_accuracy:.1%} validation accuracy")
     accuracy = np.mean(network.forward_in_batches(x).argmax(axis=1) == y.argmax(axis=1))
     return f"{accuracy:.1%} accuracy on the training boards (no validation)"
 

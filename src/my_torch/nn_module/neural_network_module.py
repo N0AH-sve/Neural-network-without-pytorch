@@ -1,5 +1,4 @@
 import json
-import math
 from collections.abc import Callable
 from dataclasses import dataclass
 
@@ -25,19 +24,29 @@ class EpochMetrics:
     validation_accuracy: float | None = None
 
 
+class TrainingHistory(list[EpochMetrics]):
+    """The metrics of every epoch run, in order, and best: the epoch whose
+    weights were kept (None without validation)."""
+    best: EpochMetrics | None = None
+
+
 class _EarlyStopping:
     """Keeps the weights of the epoch with the lowest validation loss, and
     tells when patience epochs in a row have not improved on it."""
 
     def __init__(self, patience : int):
         self.patience = patience
-        self.best_loss = math.inf
+        self.best = None
         self.best_weights = None
         self.waited = 0
 
-    def should_stop(self, loss : float, layers : list[Layer]) -> bool:
-        if loss < self.best_loss:
-            self.best_loss, self.waited = loss, 0
+    def record(self, metrics : EpochMetrics, layers : list[Layer]) -> bool:
+        """Take in an epoch, keeping its weights if it is the best so far;
+        True once training should stop. Epochs without validation are ignored."""
+        if metrics.validation_loss is None:
+            return False
+        if self.best is None or metrics.validation_loss < self.best.validation_loss:
+            self.best, self.waited = metrics, 0
             self.best_weights = [(layer.w.copy(), layer.b.copy()) for layer in layers]
             return False
         self.waited += 1
@@ -188,7 +197,7 @@ class Neural_network_module:
         return cls(layers=layers, **cls._hyperparameters(raw))
 
     def train(self, x, y,
-              on_epoch : Callable[[EpochMetrics], None] | None = None) -> list[EpochMetrics]:
+              on_epoch : Callable[[EpochMetrics], None] | None = None) -> TrainingHistory:
         """Mini-batch gradient descent on x, keeping validation_split of the
         samples aside to measure the network on data it never learns from.
 
@@ -208,16 +217,16 @@ class Neural_network_module:
         training, validation = self._split(len(x), rng)
         x_validation, y_validation = x[validation], y[validation]
         stopping = _EarlyStopping(self.patience)
-        history = []
+        history = TrainingHistory()
         for epoch in range(1, self.epochs + 1):
             loss = self._train_epoch(x, y, rng.permutation(training))
             history.append(EpochMetrics(epoch, loss, *self._validate(x_validation, y_validation)))
             if on_epoch is not None:
                 on_epoch(history[-1])
-            validation_loss = history[-1].validation_loss
-            if validation_loss is not None and stopping.should_stop(validation_loss, self.layers):
+            if stopping.record(history[-1], self.layers):
                 break
         stopping.restore(self.layers)
+        history.best = stopping.best
         return history
 
     def _split(self, n : int, rng : np.random.Generator) -> tuple[np.ndarray, np.ndarray]:

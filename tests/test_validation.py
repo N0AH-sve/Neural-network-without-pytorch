@@ -236,3 +236,22 @@ def test_on_epoch_also_sees_the_epoch_that_stops_training(data):
     received = []
     net.train(x, y, on_epoch=received.append)
     assert [m.epoch for m in received] == [1, 2, 3, 4]
+
+
+@pytest.mark.parametrize("losses, patience, kept", [
+    ([5, 4, 3, 3.5, 3.2, 3.1], 3, 3),
+    ([3, 2, 2.5], 5, 2),
+    ([2, 2, 2, 2], 3, 1),
+])
+def test_history_best_is_the_epoch_whose_weights_were_kept(data, losses, patience, kept):
+    x, y = data
+    net = network(epochs=len(losses), patience=patience)
+    script(net, losses)
+    history = net.train(x, y)
+    assert history.best.epoch == kept_epoch(net) == kept
+    assert history.best is history[kept - 1]
+
+
+def test_without_validation_there_is_no_best_epoch(data):
+    x, y = data
+    assert network(epochs=2, validation_split=0.0).train(x, y).best is None
