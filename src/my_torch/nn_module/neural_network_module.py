@@ -1,5 +1,6 @@
 import json
 import math
+from collections.abc import Callable
 from dataclasses import dataclass
 
 import numpy as np
@@ -186,7 +187,8 @@ class Neural_network_module:
 
         return cls(layers=layers, **cls._hyperparameters(raw))
 
-    def train(self, x, y) -> list[EpochMetrics]:
+    def train(self, x, y,
+              on_epoch : Callable[[EpochMetrics], None] | None = None) -> list[EpochMetrics]:
         """Mini-batch gradient descent on x, keeping validation_split of the
         samples aside to measure the network on data it never learns from.
 
@@ -198,7 +200,9 @@ class Neural_network_module:
         Training stops early once the validation loss has not improved for
         patience epochs, and the weights of the best epoch are put back: the
         epochs after it were only learning the training samples by heart.
-        Returns what each epoch measured, up to the one where it stopped.
+        Returns what each epoch measured, up to the one where it stopped;
+        on_epoch, if given, also receives each epoch's metrics as soon as the
+        epoch ends, e.g. to show progress.
         """
         rng = np.random.default_rng(self.seed)
         training, validation = self._split(len(x), rng)
@@ -208,6 +212,8 @@ class Neural_network_module:
         for epoch in range(1, self.epochs + 1):
             loss = self._train_epoch(x, y, rng.permutation(training))
             history.append(EpochMetrics(epoch, loss, *self._validate(x_validation, y_validation)))
+            if on_epoch is not None:
+                on_epoch(history[-1])
             validation_loss = history[-1].validation_loss
             if validation_loss is not None and stopping.should_stop(validation_loss, self.layers):
                 break
