@@ -8,6 +8,8 @@ from my_torch.nn_module.layer import Layer
 from my_torch.nn_module.neural_network_module import (
     BATCH_SIZE,
     EPOCH,
+    PATIENCE,
+    VALIDATION_SPLIT,
     FORMAT_VERSION,
     LEARNING_RATE,
     SEED,
@@ -184,3 +186,35 @@ def test_a_config_can_set_the_batch_size():
 def test_a_config_without_batch_size_gets_the_default():
     conf = {"layers": [4, 3], "activations": ["relu"]}
     assert Neural_network_module.from_config(conf).batch_size == BATCH_SIZE
+
+
+def test_validation_defaults_to_the_constants():
+    network = Neural_network_module([2, 1])
+    assert (network.validation_split, network.patience) == (VALIDATION_SPLIT, PATIENCE)
+    assert (VALIDATION_SPLIT, PATIENCE) == (0.2, 3)
+
+
+def test_validation_settings_survive_a_save_and_load(tmp_path):
+    path = tmp_path / "net.nn"
+    Neural_network_module([2, 1], validation_split=0.1, patience=5).save(str(path))
+    saved = json.loads(path.read_text())["hyperparameters"]
+    assert (saved["validation_split"], saved["patience"]) == (0.1, 5)
+    loaded = Neural_network_module.load(str(path))
+    assert (loaded.validation_split, loaded.patience) == (0.1, 5)
+
+
+@pytest.mark.parametrize("name", [
+    "valid.nn",
+    "valid_no_hyperparameters.nn",
+    "valid_partial_hyperparameters.nn",
+])
+def test_files_written_before_validation_get_the_defaults(name):
+    network = Neural_network_module.load(fixture(name))
+    assert (network.validation_split, network.patience) == (VALIDATION_SPLIT, PATIENCE)
+
+
+def test_a_config_can_set_the_validation():
+    conf = {"layers": [4, 3], "activations": ["relu"],
+            "hyperparameters": {"validation_split": 0.0, "patience": 1}}
+    network = Neural_network_module.from_config(conf)
+    assert (network.validation_split, network.patience) == (0.0, 1)
