@@ -126,18 +126,21 @@ def test_savefile_in_a_missing_directory(tmp_path, loadfile):
 @pytest.fixture
 def always_nothing(tmp_path):
     """A network that answers Nothing to every board, and that a learning rate
-    of 0 keeps that way: its accuracy is known in advance."""
+    of 0 keeps that way: its accuracy is known in advance. No validation split,
+    so the report is about all the boards."""
     layer = Layer(INPUT_SIZE, len(BASIC), "linear",
                   w=np.zeros((INPUT_SIZE, len(BASIC))), b=[1.0, 0.0, 0.0])
     path = tmp_path / "nothing.nn"
-    Neural_network_module(layers=[layer], epochs=1, learning_rate=0.0).save(str(path))
+    Neural_network_module(layers=[layer], epochs=1, learning_rate=0.0,
+                          validation_split=0.0).save(str(path))
     return path
 
 
 def test_report_gives_the_boards_and_the_accuracy(tmp_path, always_nothing, capsys):
     """1 board out of 3 is Nothing."""
     train(Arguments("train", str(always_nothing), str(chessfile(tmp_path, TRAINING_LINES))))
-    assert capsys.readouterr().out.splitlines()[-1] == "Number of boards : 3, 33.3% accuracy"
+    assert capsys.readouterr().out.splitlines()[-1] == (
+        "Number of boards : 3, 33.3% accuracy on the training boards (no validation)")
 
 
 def test_no_report_when_the_save_fails(tmp_path, always_nothing, capsys):

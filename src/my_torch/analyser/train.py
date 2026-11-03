@@ -22,11 +22,24 @@ def train(args: Arguments) -> int:
         raise ValueError(f"{args.chessfile}: no board to train on")
     x = encode_all(sample.position for sample in samples)
     y = BASIC.one_hot(sample.label for sample in samples)
-    network.train(x, y, on_epoch=lambda metrics: _print_epoch(metrics, network.epochs))
-    accuracy = np.mean(network.forward_in_batches(x).argmax(axis=1) == y.argmax(axis=1))
+    history = network.train(x, y, on_epoch=lambda metrics: _print_epoch(metrics, network.epochs))
+    summary = _summary(network, history, x, y)
     _save(network, args.savefile or args.loadfile)
-    print(f"Number of boards : {len(samples)}, {accuracy:.1%} accuracy")
+    print(f"Number of boards : {len(samples)}, {summary}")
     return 0
+
+
+def _summary(network: Neural_network_module, history: list[EpochMetrics], x, y) -> str:
+    """How good the saved network is. With validation, its accuracy on boards
+    it never trained on; without, only its accuracy on the training boards,
+    which cannot tell learning from learning by heart."""
+    validated = [metrics for metrics in history if metrics.validation_loss is not None]
+    if validated:
+        best = min(validated, key=lambda metrics: metrics.validation_loss)
+        return (f"kept epoch {best.epoch} of {len(history)}, "
+                f"{best.validation_accuracy:.1%} validation accuracy")
+    accuracy = np.mean(network.forward_in_batches(x).argmax(axis=1) == y.argmax(axis=1))
+    return f"{accuracy:.1%} accuracy on the training boards (no validation)"
 
 
 def _print_epoch(metrics: EpochMetrics, epochs: int) -> None:
