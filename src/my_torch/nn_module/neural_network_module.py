@@ -1,4 +1,5 @@
 import json
+import math
 from dataclasses import dataclass
 
 import numpy as np
@@ -21,6 +22,32 @@ class EpochMetrics:
     loss: float
     validation_loss: float | None = None
     validation_accuracy: float | None = None
+
+
+class _EarlyStopping:
+    """Keeps the weights of the epoch with the lowest validation loss, and
+    tells when patience epochs in a row have not improved on it."""
+
+    def __init__(self, patience : int):
+        self.patience = patience
+        self.best_loss = math.inf
+        self.best_weights = None
+        self.waited = 0
+
+    def should_stop(self, loss : float, layers : list[Layer]) -> bool:
+        if loss < self.best_loss:
+            self.best_loss, self.waited = loss, 0
+            self.best_weights = [(layer.w.copy(), layer.b.copy()) for layer in layers]
+            return False
+        self.waited += 1
+        return self.waited >= self.patience
+
+    def restore(self, layers : list[Layer]) -> None:
+        """Put the best weights back; does nothing if no epoch was validated."""
+        if self.best_weights is None:
+            return
+        for layer, (w, b) in zip(layers, self.best_weights, strict=True):
+            layer.w, layer.b = w, b
 
 
 # choice Active_fct between sigmoid fcttanh, relU, soft plus expo linera https://www.geeksforgeeks.org/machine-learning/activation-functions-neural-networks/
@@ -166,15 +193,25 @@ class Neural_network_module:
         The validation samples are drawn once, then every epoch visits the
         other samples in a new order. Both orders come from the seed, so the
         same network trained on the same data always ends up with the same
-        weights. Returns what each epoch measured.
+        weights.
+
+        Training stops early once the validation loss has not improved for
+        patience epochs, and the weights of the best epoch are put back: the
+        epochs after it were only learning the training samples by heart.
+        Returns what each epoch measured, up to the one where it stopped.
         """
         rng = np.random.default_rng(self.seed)
         training, validation = self._split(len(x), rng)
         x_validation, y_validation = x[validation], y[validation]
+        stopping = _EarlyStopping(self.patience)
         history = []
         for epoch in range(1, self.epochs + 1):
             loss = self._train_epoch(x, y, rng.permutation(training))
             history.append(EpochMetrics(epoch, loss, *self._validate(x_validation, y_validation)))
+            validation_loss = history[-1].validation_loss
+            if validation_loss is not None and stopping.should_stop(validation_loss, self.layers):
+                break
+        stopping.restore(self.layers)
         return history
 
     def _split(self, n : int, rng : np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
