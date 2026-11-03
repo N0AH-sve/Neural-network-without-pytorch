@@ -204,3 +204,35 @@ def test_on_random_labels_training_stops_and_keeps_the_best_epoch():
     held_out = calls[-1]
     output = net.forward(x[held_out])
     assert np.mean((output - y[held_out]) ** 2) == pytest.approx(best.validation_loss)
+
+
+def test_on_epoch_receives_every_epoch_in_order(data):
+    x, y = data
+    received = []
+    history = network(epochs=4).train(x, y, on_epoch=received.append)
+    assert received == history
+
+
+def test_on_epoch_is_called_as_each_epoch_ends(data):
+    """Progress is live: epoch n is reported before epoch n + 1 starts."""
+    x, y = data
+    net = network(epochs=3, validation_split=0.0)
+    events = []
+    train_epoch = net._train_epoch
+
+    def recording_train_epoch(*args):
+        events.append("train")
+        return train_epoch(*args)
+
+    net._train_epoch = recording_train_epoch
+    net.train(x, y, on_epoch=lambda metrics: events.append(metrics.epoch))
+    assert events == ["train", 1, "train", 2, "train", 3]
+
+
+def test_on_epoch_also_sees_the_epoch_that_stops_training(data):
+    x, y = data
+    net = network(epochs=10, patience=2)
+    script(net, [3, 2, 2.5, 2.4, 1, 1, 1, 1, 1, 1])
+    received = []
+    net.train(x, y, on_epoch=received.append)
+    assert [m.epoch for m in received] == [1, 2, 3, 4]
