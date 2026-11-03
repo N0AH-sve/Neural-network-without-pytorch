@@ -13,6 +13,23 @@ the hyperparameters used for training.
 Input of `my_torch_generator`: description of the topology of a network to
 generate (layer sizes, activations, initialization strategy).
 
+## Hyperparameters
+
+Both files carry the training hyperparameters in a `"hyperparameters"` object;
+the generator copies them from the `.conf` into every `.nn` it writes. Any of
+them may be left out, which gives the default:
+
+| Key | Default | Meaning |
+| --- | --- | --- |
+| `epochs` | `20` | passes over the training boards |
+| `learning_rate` | `0.005` | size of each gradient step |
+| `batch_size` | `64` | boards per weight update; at least the number of boards gives full-batch descent |
+| `seed` | `42` | order in which the boards are shuffled at each epoch |
+
+`epochs` and `batch_size` must be positive integers, `learning_rate` a positive
+number, `seed` any integer. `.nn` files written before `batch_size` existed load
+with the default.
+
 ## Chessboard file
 
 One board per line, in

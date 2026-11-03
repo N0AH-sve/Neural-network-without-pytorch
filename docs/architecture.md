@@ -56,25 +56,25 @@ first prediction is printed, so a broken board never leaves a truncated list.
 | --- | --- | --- | --- |
 | 1. Load the network | `analyser.network.load_network(loadfile)` | network with 769 inputs, 3 outputs | done |
 | 2. Read the file | `chessfile.read_samples(file, require_labels=True)` | `list[Sample]` | done |
-| 3. Encode the boards | `features.encode_all(s.position for s in samples)` | `X`, shape `(N, 769)` | done |
+| 3. Encode the boards | `features.encode_all(s.position for s in samples)` | `X`, shape `(N, 769)`, booleans | done |
 | 4. Encode the labels | `BASIC.one_hot(s.label for s in samples)` | `Y`, shape `(N, 3)` | done |
-| 5. Run the network | `network.forward(X)`, inside `network.train` | scores, shape `(N, 3)` | done |
-| 6. Compare with `Y` | loss on scores and `Y` | gradient of the loss | MSE inline in `train`; `losses.py` to do |
-| 7. Learn | `network.backward(gradient)`, `network.update(learning_rate)` | new weights and biases | done |
+| 5. Run the network | `network.forward(X[batch])`, inside `network.train`, on shuffled batches of `batch_size` boards | scores, shape `(batch_size, 3)` | done |
+| 6. Compare with `Y` | loss on scores and `Y[batch]` | gradient of the loss | MSE inline in `train`; `losses.py` to do |
+| 7. Learn | `network.backward(gradient)`, `network.update(learning_rate)`, after every batch | new weights and biases | done |
 | 8. Save | written to `<path>.tmp`, then `os.replace` | `.nn` file (JSON) in `SAVEFILE` or `LOADFILE` | done |
-| 9. Report | accuracy on the training boards | one line on stdout | done |
+| 9. Report | accuracy on the training boards, with `network.forward_in_batches` | one line on stdout | done |
 
 All of it runs in `analyser/train.py`. `Y` is never fed to the network: it is
 only compared with the network's output in step 6.
 
 ## Input encoding
 
-Each board becomes 769 values (`features.INPUT_SIZE`):
+Each board becomes 769 booleans (`features.INPUT_SIZE`):
 
 | Indices | Meaning |
 | --- | --- |
-| `plane * 64 + row * 8 + col` | 1 if the piece of `plane` is on that square, else 0 |
-| `768` (last) | 1 if White is to move, 0 if Black |
+| `plane * 64 + row * 8 + col` | `True` if the piece of `plane` is on that square |
+| `768` (last) | `True` if White is to move |
 
 | Plane | 0 | 1 | 2 | 3 | 4 | 5 | 6 | 7 | 8 | 9 | 10 | 11 |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -90,6 +90,11 @@ Why this layout:
   piece code: a code would tell the network that a queen (5) is worth 5 pawns
   (1) through the same weight, an ordering that means nothing. Here every
   piece/square pair has its own weights.
+- **Booleans, not floats**: 1 byte per value instead of 8, so the 572k
+  training boards take 440 MB instead of 3.5 GB. numpy turns each batch into
+  floats when it meets the weights, and `--train` measures its accuracy with
+  `forward_in_batches`, so training never makes a full float copy. (`--predict`
+  still runs `forward` on the whole file, which is fine for small files.)
 - **Side to move** is needed for the coloured labels: in a legal position only
   the side to move can be in check.
 - **Castling, en passant and the move counters are left out**: they are

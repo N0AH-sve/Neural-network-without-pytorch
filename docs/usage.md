@@ -26,8 +26,11 @@ Number of boards : 3, 100.0% accuracy
 1. `LOADFILE` is loaded and must take 769 inputs (one encoded board) and give
    3 outputs (`Nothing`, `Check`, `Checkmate`).
 2. Every line of `CHESSFILE` must have its expected output.
-3. The network is trained with the epochs and learning rate stored in
-   `LOADFILE`.
+3. The network is trained with the hyperparameters stored in `LOADFILE`
+   (see [formats.md](formats.md#hyperparameters)): at each epoch the boards are
+   shuffled, then the weights are updated after every `batch_size` boards. The
+   shuffle follows `seed`, so the same `LOADFILE` trained on the same file
+   always gives the same network.
 4. It is saved in `SAVEFILE`, or back in `LOADFILE`. The file is written to
    `<path>.tmp` then renamed, so a crash never leaves a half-written network.
 5. The number of boards and the accuracy are printed once the save succeeded.
@@ -35,6 +38,14 @@ Number of boards : 3, 100.0% accuracy
    network learned them, not that it generalises.
 
 On any error, nothing is saved and `LOADFILE` is left untouched.
+
+The wrapper uses 4 OpenBLAS threads unless `OPENBLAS_NUM_THREADS` is set, which
+is the fastest on small batches (see
+[benchmarks.md](benchmarks.md#training-speed-batch-size-and-openblas-threads)):
+
+```sh
+$> OPENBLAS_NUM_THREADS=8 ./my_torch_analyzer --train my_torch_network.nn boards.txt
+```
 
 | Error | Example message |
 | --- | --- |
