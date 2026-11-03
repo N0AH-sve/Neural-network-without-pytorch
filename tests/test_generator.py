@@ -161,9 +161,9 @@ def test_check_conf_rejects_hyperparameters_that_are_not_an_object():
         check(VALID_CONF | {"hyperparameters": [10, 0.5]})
 
 
-@pytest.mark.parametrize("key", ["epochs", "seed", "batch_size"])
+@pytest.mark.parametrize("key", ["epochs", "seed", "batch_size", "patience"])
 @pytest.mark.parametrize("value", ["10", 10.5, None, True])
-def test_check_conf_rejects_a_non_integer_epochs_seed_or_batch_size(key, value):
+def test_check_conf_rejects_a_non_integer_hyperparameter(key, value):
     with pytest.raises(GeneratorError, match=f"'{key}' must be an integer"):
         check(VALID_CONF | {"hyperparameters": {key: value}})
 
@@ -184,6 +184,30 @@ def test_check_conf_rejects_a_batch_size_that_is_not_positive(batch_size):
 def test_check_conf_accepts_a_positive_batch_size(batch_size):
     """A batch bigger than the dataset is allowed: it means full-batch descent."""
     check(VALID_CONF | {"hyperparameters": {"batch_size": batch_size}})
+
+
+@pytest.mark.parametrize("patience", [0, -1])
+def test_check_conf_rejects_a_patience_that_is_not_positive(patience):
+    with pytest.raises(GeneratorError, match="'patience' must be positive"):
+        check(VALID_CONF | {"hyperparameters": {"patience": patience}})
+
+
+@pytest.mark.parametrize("split", ["0.2", None, True, [0.2]])
+def test_check_conf_rejects_a_validation_split_that_is_not_a_number(split):
+    with pytest.raises(GeneratorError, match="'validation_split' must be a number"):
+        check(VALID_CONF | {"hyperparameters": {"validation_split": split}})
+
+
+@pytest.mark.parametrize("split", [1, 1.5, -0.1])
+def test_check_conf_rejects_a_validation_split_out_of_range(split):
+    with pytest.raises(GeneratorError, match=re.escape("'validation_split' must be in [0, 1)")):
+        check(VALID_CONF | {"hyperparameters": {"validation_split": split}})
+
+
+@pytest.mark.parametrize("split", [0, 0.0, 0.2, 0.99])
+def test_check_conf_accepts_a_validation_split_in_range(split):
+    """0 turns validation off; anything below 1 leaves boards to train on."""
+    check(VALID_CONF | {"hyperparameters": {"validation_split": split}})
 
 
 def test_check_conf_accepts_a_negative_seed():
@@ -368,6 +392,10 @@ def test_a_valid_fixture_is_accepted(name):
     ("epochs_not_positive.conf", "'epochs' must be positive"),
     ("batch_size_not_an_integer.conf", "'batch_size' must be an integer"),
     ("batch_size_not_positive.conf", "'batch_size' must be positive"),
+    ("patience_not_an_integer.conf", "'patience' must be an integer"),
+    ("patience_not_positive.conf", "'patience' must be positive"),
+    ("validation_split_not_a_number.conf", "'validation_split' must be a number"),
+    ("validation_split_out_of_range.conf", "'validation_split' must be in [0, 1)"),
     ("seed_not_an_integer.conf", "'seed' must be an integer"),
     ("learning_rate_not_a_number.conf", "'learning_rate' must be a number"),
     ("learning_rate_not_positive.conf", "'learning_rate' must be positive"),
@@ -428,6 +456,10 @@ def test_main_generates_a_network_from_a_valid_fixture(name, tmp_path, monkeypat
     "epochs_not_positive.conf",
     "batch_size_not_an_integer.conf",
     "batch_size_not_positive.conf",
+    "patience_not_an_integer.conf",
+    "patience_not_positive.conf",
+    "validation_split_not_a_number.conf",
+    "validation_split_out_of_range.conf",
     "seed_not_an_integer.conf",
     "learning_rate_not_a_number.conf",
     "learning_rate_not_positive.conf",
@@ -496,3 +528,13 @@ def test_a_configured_batch_size_reaches_the_generated_file(tmp_path, monkeypatc
     conf.write_text(json.dumps(VALID_CONF | {"hyperparameters": {"batch_size": 16}}))
     assert main([str(conf), "1"]) == 0
     assert Neural_network_module.load("batched_1.nn").batch_size == 16
+
+
+def test_configured_validation_settings_reach_the_generated_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    conf = tmp_path / "validated.conf"
+    conf.write_text(json.dumps(
+        VALID_CONF | {"hyperparameters": {"validation_split": 0.1, "patience": 7}}))
+    assert main([str(conf), "1"]) == 0
+    network = Neural_network_module.load("validated_1.nn")
+    assert (network.validation_split, network.patience) == (0.1, 7)
