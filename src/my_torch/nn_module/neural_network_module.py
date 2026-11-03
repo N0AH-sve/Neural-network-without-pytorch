@@ -4,7 +4,7 @@ import numpy as np
 
 from my_torch.nn_module.layer import Layer
 
-EPOCH = 2000
+EPOCH = 20
 LEARNING_RATE = 0.005
 BATCH_SIZE = 64
 SEED = 42 # everyone have 42 <
