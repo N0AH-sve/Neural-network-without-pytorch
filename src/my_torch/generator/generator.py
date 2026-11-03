@@ -82,11 +82,11 @@ class Generator:
         hyper = conf.get("hyperparameters", {})
         if not isinstance(hyper, dict):
             raise GeneratorError(f"{where}: 'hyperparameters' must be an object")
-        for key in ("epochs", "seed", "batch_size"):
+        for key in ("epochs", "seed", "batch_size", "patience"):
             if key in hyper and (isinstance(hyper[key], bool)
                                  or not isinstance(hyper[key], int)):
                 raise GeneratorError(f"{where}: '{key}' must be an integer")
-        for key in ("epochs", "batch_size"):
+        for key in ("epochs", "batch_size", "patience"):
             if key in hyper and hyper[key] <= 0:
                 raise GeneratorError(f"{where}: '{key}' must be positive")
         if "learning_rate" in hyper:
@@ -95,6 +95,12 @@ class Generator:
                 raise GeneratorError(f"{where}: 'learning_rate' must be a number")
             if rate <= 0:
                 raise GeneratorError(f"{where}: 'learning_rate' must be positive")
+        if "validation_split" in hyper:
+            split = hyper["validation_split"]
+            if isinstance(split, bool) or not isinstance(split, (int, float)):
+                raise GeneratorError(f"{where}: 'validation_split' must be a number")
+            if not 0 <= split < 1:
+                raise GeneratorError(f"{where}: 'validation_split' must be in [0, 1)")
 
     def check_conf(self, conf: dict, path: str) -> None:
         """Reject a configuration before any network is written to disk."""
