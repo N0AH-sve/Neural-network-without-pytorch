@@ -1,3 +1,5 @@
+import re
+
 import numpy as np
 import pytest
 
@@ -155,3 +157,66 @@ def test_no_report_for_a_bad_chess_file(tmp_path, always_nothing, capsys):
     with pytest.raises(ValueError):
         train(Arguments("train", str(always_nothing), str(chessfile(tmp_path, []))))
     assert capsys.readouterr().out == ""
+
+
+EPOCH_LINE = re.compile(r"epoch (\d+)/(\d+): loss \d+\.\d{4}, validation loss (\d+\.\d{4}), "
+                        r"validation accuracy (\d+\.\d)%")
+
+
+def test_one_progress_line_per_epoch_then_the_report(tmp_path, loadfile, capsys):
+    train(Arguments("train", str(loadfile), str(chessfile(tmp_path, TRAINING_LINES))))
+    *epochs, report = capsys.readouterr().out.splitlines()
+    matches = [EPOCH_LINE.fullmatch(line) for line in epochs]
+    assert all(matches)
+    assert [int(m[1]) for m in matches] == list(range(1, len(epochs) + 1))
+    assert {m[2] for m in matches} == {"300"}
+    assert report.startswith("Number of boards : 3, kept epoch ")
+
+
+def test_without_validation_the_progress_line_has_only_the_loss(tmp_path, always_nothing,
+                                                                capsys):
+    """Every board gets [1, 0, 0]: 2 boards out of 3 are off by 1 on two outputs,
+    so the mean squared error is 4 / 9."""
+    train(Arguments("train", str(always_nothing), str(chessfile(tmp_path, TRAINING_LINES))))
+    assert capsys.readouterr().out.splitlines()[0] == "epoch 1/1: loss 0.4444"
+
+
+@pytest.fixture
+def frozen_with_validation(tmp_path):
+    """always_nothing with a validation split: its validation loss never
+    changes, so it never improves after epoch 1 and patience 2 stops it at 3."""
+    layer = Layer(INPUT_SIZE, len(BASIC), "linear",
+                  w=np.zeros((INPUT_SIZE, len(BASIC))), b=[1.0, 0.0, 0.0])
+    path = tmp_path / "frozen.nn"
+    Neural_network_module(layers=[layer], epochs=10, learning_rate=0.0,
+                          patience=2).save(str(path))
+    return path
+
+
+def test_the_report_names_the_kept_epoch_and_its_validation_accuracy(
+        tmp_path, frozen_with_validation, capsys):
+    train(Arguments("train", str(frozen_with_validation),
+                    str(chessfile(tmp_path, TRAINING_LINES))))
+    *epochs, report = capsys.readouterr().out.splitlines()
+    assert [line.split(":")[0] for line in epochs] == ["epoch 1/10", "epoch 2/10", "epoch 3/10"]
+    first_accuracy = EPOCH_LINE.fullmatch(epochs[0])[4]
+    assert report == (f"Number of boards : 3, kept epoch 1 of 3, "
+                      f"{first_accuracy}% validation accuracy")
+
+
+def test_the_kept_epoch_is_the_one_with_the_lowest_validation_loss(tmp_path, capsys):
+    """Read back from the progress lines themselves, on a network that learns.
+    The printed losses are rounded, so two epochs may print the same one: the
+    kept epoch only has to print the lowest."""
+    path = tmp_path / "net.nn"
+    Neural_network_module([INPUT_SIZE, 16, len(BASIC)], epochs=15, learning_rate=0.05,
+                          batch_size=4, patience=3).save(str(path))
+    train(Arguments("train", str(path), str(chessfile(tmp_path, TRAINING_LINES * 10))))
+    *epochs, report = capsys.readouterr().out.splitlines()
+    matches = [EPOCH_LINE.fullmatch(line) for line in epochs]
+    kept = re.fullmatch(r"Number of boards : 30, kept epoch (\d+) of (\d+), "
+                        r"(\d+\.\d)% validation accuracy", report)
+    assert int(kept[2]) == len(epochs)
+    kept_line = matches[int(kept[1]) - 1]
+    assert float(kept_line[3]) == min(float(m[3]) for m in matches)
+    assert kept[3] == kept_line[4]
