@@ -13,6 +13,7 @@ my_torch_generator = "my_torch.generator.generator:main"
 
 [dependency-groups]
 dev = [
+    "matplotlib>=3.11.2",
     "pytest>=8.0",
 ]
 

@@ -6,6 +6,7 @@ import pytest
 
 from my_torch.nn_module.layer import Layer
 from my_torch.nn_module.neural_network_module import (
+    BATCH_SIZE,
     EPOCH,
     FORMAT_VERSION,
     LEARNING_RATE,
@@ -51,7 +52,7 @@ def test_saved_file_is_split_between_data_and_hyperparameters(tmp_path):
     Neural_network_module([4, 3, 2]).save(str(path))
     saved = json.loads(path.read_text())
     assert saved["version"] == FORMAT_VERSION
-    assert set(saved["hyperparameters"]) == {"epochs", "learning_rate", "seed"}
+    assert set(saved["hyperparameters"]) == {"epochs", "learning_rate", "seed", "batch_size"}
     assert len(saved["data"]["layers"]) == 2
 
 
@@ -150,3 +151,34 @@ def test_a_broken_file_is_rejected(name, message):
 def test_loading_a_file_that_does_not_exist_raises_an_os_error(tmp_path):
     with pytest.raises(OSError):
         Neural_network_module.load(str(tmp_path / "absent.nn"))
+
+
+def test_batch_size_defaults_to_the_constant():
+    assert Neural_network_module([2, 1]).batch_size == BATCH_SIZE == 64
+
+
+def test_batch_size_survives_a_save_and_load(tmp_path):
+    path = tmp_path / "net.nn"
+    Neural_network_module([2, 1], batch_size=16).save(str(path))
+    assert json.loads(path.read_text())["hyperparameters"]["batch_size"] == 16
+    assert Neural_network_module.load(str(path)).batch_size == 16
+
+
+@pytest.mark.parametrize("name", [
+    "valid.nn",
+    "valid_no_hyperparameters.nn",
+    "valid_partial_hyperparameters.nn",
+])
+def test_files_written_before_batch_size_get_the_default(name):
+    """Every .nn file saved before batch_size existed still loads."""
+    assert Neural_network_module.load(fixture(name)).batch_size == BATCH_SIZE
+
+
+def test_a_config_can_set_the_batch_size():
+    conf = {"layers": [4, 3], "activations": ["relu"], "hyperparameters": {"batch_size": 8}}
+    assert Neural_network_module.from_config(conf).batch_size == 8
+
+
+def test_a_config_without_batch_size_gets_the_default():
+    conf = {"layers": [4, 3], "activations": ["relu"]}
+    assert Neural_network_module.from_config(conf).batch_size == BATCH_SIZE

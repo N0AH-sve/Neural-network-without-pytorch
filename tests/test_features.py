@@ -1,8 +1,11 @@
+import copy
+
 import numpy as np
 import pytest
 
 from my_torch.encoding.features import INPUT_SIZE, encode, encode_all
 from my_torch.encoding.position import Position
+from my_torch.nn_module.neural_network_module import Neural_network_module
 
 START = Position.from_fen("rnbqkbnr/pppppppp/8/8/8/8/PPPPPPPP/RNBQKBNR w KQkq - 0 1")
 
@@ -21,8 +24,7 @@ def test_input_size_is_769():
 def test_shape_and_values():
     x = encode(START)
     assert x.shape == (INPUT_SIZE,)
-    assert x.dtype == np.float64
-    assert set(np.unique(x)) <= {0.0, 1.0}
+    assert x.dtype == np.bool_
 
 
 def test_one_value_per_piece():
@@ -80,3 +82,31 @@ def test_encode_all_accepts_a_generator():
 
 def test_encode_all_of_nothing_is_an_empty_matrix():
     assert encode_all([]).shape == (0, INPUT_SIZE)
+
+
+def test_encode_all_is_boolean():
+    assert encode_all([START, START]).dtype == np.bool_
+    assert encode_all([]).dtype == np.bool_
+
+
+def test_a_board_takes_one_byte_per_value():
+    """8 times less than float64: 769 bytes per board instead of 6,152."""
+    assert encode_all([START, START]).nbytes == 2 * INPUT_SIZE
+
+
+def test_the_network_reads_booleans_like_floats():
+    x = encode_all([START, Position.from_fen("k7/8/8/8/8/8/8/7K b - -")])
+    network = Neural_network_module([INPUT_SIZE, 8, 3])
+    assert np.array_equal(network.forward(x), network.forward(x.astype(float)))
+
+
+def test_training_on_booleans_matches_training_on_floats():
+    x = encode_all([START, Position.from_fen("k7/8/8/8/8/8/8/7K b - -")] * 5)
+    y = np.eye(3)[[0, 1] * 5]
+    network = Neural_network_module([INPUT_SIZE, 8, 3], epochs=3, batch_size=4)
+    twin = copy.deepcopy(network)
+    network.train(x, y)
+    twin.train(x.astype(float), y)
+    for trained, expected in zip(network.layers, twin.layers, strict=True):
+        assert np.array_equal(trained.w, expected.w)
+        assert np.array_equal(trained.b, expected.b)

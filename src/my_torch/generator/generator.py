@@ -82,12 +82,13 @@ class Generator:
         hyper = conf.get("hyperparameters", {})
         if not isinstance(hyper, dict):
             raise GeneratorError(f"{where}: 'hyperparameters' must be an object")
-        for key in ("epochs", "seed"):
+        for key in ("epochs", "seed", "batch_size"):
             if key in hyper and (isinstance(hyper[key], bool)
                                  or not isinstance(hyper[key], int)):
                 raise GeneratorError(f"{where}: '{key}' must be an integer")
-        if "epochs" in hyper and hyper["epochs"] <= 0:
-            raise GeneratorError(f"{where}: 'epochs' must be positive")
+        for key in ("epochs", "batch_size"):
+            if key in hyper and hyper[key] <= 0:
+                raise GeneratorError(f"{where}: '{key}' must be positive")
         if "learning_rate" in hyper:
             rate = hyper["learning_rate"]
             if isinstance(rate, bool) or not isinstance(rate, (int, float)):

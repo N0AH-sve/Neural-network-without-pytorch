@@ -11,6 +11,11 @@ ANALYZER        :=      my_torch_analyzer
 GENERATOR       :=      my_torch_generator
 BINARIES        :=      $(ANALYZER) $(GENERATOR)
 
+# Default OpenBLAS threads of the analyzer: mini-batch matrices are small, and
+# more threads spend longer coordinating than computing. Override at run time
+# with OPENBLAS_NUM_THREADS=n ./my_torch_analyzer ...
+BLAS_THREADS    :=      4
+
 .PHONY: all install run tests_run clean fclean re help
 
 all: $(BINARIES)
@@ -19,7 +24,7 @@ install:
 	$(UV) sync
 
 $(ANALYZER): install
-	@printf '#!/bin/sh\nexec uv run --quiet python -m my_torch.analyser.analyzer "$$@"\n' > $@
+	@printf '#!/bin/sh\nexport OPENBLAS_NUM_THREADS="$${OPENBLAS_NUM_THREADS:-$(BLAS_THREADS)}"\nexec uv run --quiet python -m my_torch.analyser.analyzer "$$@"\n' > $@
 	@chmod +x $@
 	@echo "$@ ready"
 

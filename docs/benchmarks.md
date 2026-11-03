@@ -16,3 +16,53 @@ precision, recall, confusion matrix), hardware.
 ## Learning curves
 
 Plots to be added here.
+
+## Training speed: batch size and OpenBLAS threads
+
+numpy hands every matrix product to OpenBLAS, which splits it over several
+threads. This measures how long one training epoch takes depending on the
+batch size and on the number of threads.
+
+![Seconds per epoch against OpenBLAS threads, one line per batch size: every
+batch size is fastest at 4 threads; batch 64 is 2-2.5 times slower at 22
+threads](images/blas_threads.png)
+
+| Threads | batch 64 | batch 512 | full batch |
+| --- | --- | --- | --- |
+| 1 | 0.40 s | 0.31 s | 0.37 s |
+| 2 | 0.28 s | 0.22 s | 0.27 s |
+| 4 | **0.25 s** | **0.17 s** | **0.20 s** |
+| 8 | 0.33 s | 0.20 s | 0.23 s |
+| 16 | 0.43 s | 0.22 s | 0.26 s |
+| 22 | 0.60 s | 0.43 s | 0.32 s |
+
+**Protocol.** `uv run python benchmarks/threads.py`. One epoch of
+`Neural_network_module.train` on 20,000 boards, network `[769, 128, 64, 3]`,
+median of 7 runs per point; each thread count runs in its own process, since
+OpenBLAS reads `OPENBLAS_NUM_THREADS` when numpy is imported. The boards are
+random 0/1 vectors as sparse as real ones (4% ones): the time of a matrix
+product does not depend on the values. Intel Core Ultra 7 155H (22 logical
+cores), Python 3.14, numpy 2.5, OpenBLAS 0.3.34. The machine was not idle (load
+average ~4): points vary by up to ~0.1 s between runs, the 16-thread one most.
+
+**Results.**
+
+- **4 threads is the fastest for every batch size.** Past that, threads spend
+  longer coordinating than computing.
+- **Small batches suffer most from too many threads**: batch 64 takes 2-2.5×
+  longer at 22 threads than at 4, because its matrices (64 × 769 times
+  769 × 128) are too small to split usefully. The full batch, with
+  20,000-row matrices, barely changes.
+- **Batch 512 is the fastest per epoch**, but makes 8 times fewer weight
+  updates than batch 64: speed per epoch is not learning per epoch, which the
+  accuracy benchmarks have to settle.
+
+**Consequence.** The `./my_torch_analyzer` wrapper written by the Makefile sets
+`OPENBLAS_NUM_THREADS=4` unless it is already set
+(`BLAS_THREADS` in the Makefile). On the real `--train` with 20,000 boards and
+batch 64, one run went from 22.1 s at 22 threads to 7.5 s at 4.
+
+**Why not one thread per batch?** Mini-batch descent is sequential: each batch
+starts from the weights the previous one produced. Splitting one batch across
+threads and summing their gradients is what OpenBLAS already does inside each
+matrix product.

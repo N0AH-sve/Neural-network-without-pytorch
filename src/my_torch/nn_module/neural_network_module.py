@@ -1,9 +1,12 @@
 import json
 
+import numpy as np
+
 from my_torch.nn_module.layer import Layer
 
-EPOCH = 2000
+EPOCH = 20
 LEARNING_RATE = 0.005
+BATCH_SIZE = 64
 SEED = 42 # everyone have 42 <
 FORMAT_VERSION = 1
 
@@ -14,10 +17,11 @@ FORMAT_VERSION = 1
 class Neural_network_module:
     def __init__(self, int_layers : list[int] | None = None, epochs : int = EPOCH,
                  learning_rate : float = LEARNING_RATE, seed : int = SEED,
-                 layers : list[Layer] | None = None):
+                 layers : list[Layer] | None = None, batch_size : int = BATCH_SIZE):
         self.epochs = epochs
         self.learning_rate = learning_rate
         self.seed = seed
+        self.batch_size = batch_size
         self.layers = self._init_layers(int_layers) if layers is None else layers
         self.version = 1
 
@@ -36,6 +40,15 @@ class Neural_network_module:
             x = layer.forward(x)
         return x
 
+    def forward_in_batches(self, x, batch_size : int = 4096):
+        """Same result as forward(x), computed on slices of batch_size samples:
+        only one slice at a time is turned into floats, so a large boolean
+        input never needs its full float64 copy in memory."""
+        if len(x) == 0:
+            return self.forward(x)
+        return np.concatenate([self.forward(x[start:start + batch_size])
+                               for start in range(0, len(x), batch_size)])
+
     def backward(self, grad):
         for layer in reversed(self.layers):
             grad = layer.backward(grad)
@@ -52,6 +65,7 @@ class Neural_network_module:
                 "epochs": self.epochs,
                 "learning_rate": self.learning_rate,
                 "seed": self.seed,
+                "batch_size": self.batch_size,
             },
             "data": {
                 "layers": [
@@ -79,6 +93,7 @@ class Neural_network_module:
             "epochs": hyper.get("epochs", EPOCH),
             "learning_rate": hyper.get("learning_rate", LEARNING_RATE),
             "seed": hyper.get("seed", SEED),
+            "batch_size": hyper.get("batch_size", BATCH_SIZE),
         }
 
     @classmethod
@@ -125,7 +140,18 @@ class Neural_network_module:
         return cls(layers=layers, **cls._hyperparameters(raw))
 
     def train(self, x, y):
+        """Mini-batch gradient descent: every epoch visits the samples once, in
+        a new order, and updates the weights after each batch.
+
+        The order comes from the seed, so the same network trained on the same
+        data always ends up with the same weights. A batch_size of at least
+        len(x) gives plain full-batch descent.
+        """
+        rng = np.random.default_rng(self.seed)
         for _ in range(self.epochs):
-            output = self.forward(x)
-            self.backward((output - y) / len(x))
-            self.update(self.learning_rate)
+            order = rng.permutation(len(x))
+            for start in range(0, len(x), self.batch_size):
+                batch = order[start:start + self.batch_size]
+                output = self.forward(x[batch])
+                self.backward((output - y[batch]) / len(batch))
+                self.update(self.learning_rate)
