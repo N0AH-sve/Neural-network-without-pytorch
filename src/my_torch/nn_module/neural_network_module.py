@@ -7,6 +7,8 @@ from my_torch.nn_module.layer import Layer
 EPOCH = 20
 LEARNING_RATE = 0.005
 BATCH_SIZE = 64
+VALIDATION_SPLIT = 0.2
+PATIENCE = 3
 SEED = 42 # everyone have 42 <
 FORMAT_VERSION = 1
 
@@ -17,11 +19,14 @@ FORMAT_VERSION = 1
 class Neural_network_module:
     def __init__(self, int_layers : list[int] | None = None, epochs : int = EPOCH,
                  learning_rate : float = LEARNING_RATE, seed : int = SEED,
-                 layers : list[Layer] | None = None, batch_size : int = BATCH_SIZE):
+                 layers : list[Layer] | None = None, batch_size : int = BATCH_SIZE,
+                 validation_split : float = VALIDATION_SPLIT, patience : int = PATIENCE):
         self.epochs = epochs
         self.learning_rate = learning_rate
         self.seed = seed
         self.batch_size = batch_size
+        self.validation_split = validation_split
+        self.patience = patience
         self.layers = self._init_layers(int_layers) if layers is None else layers
         self.version = 1
 
@@ -66,6 +71,8 @@ class Neural_network_module:
                 "learning_rate": self.learning_rate,
                 "seed": self.seed,
                 "batch_size": self.batch_size,
+                "validation_split": self.validation_split,
+                "patience": self.patience,
             },
             "data": {
                 "layers": [
@@ -94,6 +101,8 @@ class Neural_network_module:
             "learning_rate": hyper.get("learning_rate", LEARNING_RATE),
             "seed": hyper.get("seed", SEED),
             "batch_size": hyper.get("batch_size", BATCH_SIZE),
+            "validation_split": hyper.get("validation_split", VALIDATION_SPLIT),
+            "patience": hyper.get("patience", PATIENCE),
         }
 
     @classmethod
