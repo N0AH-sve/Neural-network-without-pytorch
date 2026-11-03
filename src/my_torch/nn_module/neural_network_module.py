@@ -1,5 +1,7 @@
 import json
 
+import numpy as np
+
 from my_torch.nn_module.layer import Layer
 
 EPOCH = 2000
@@ -129,7 +131,18 @@ class Neural_network_module:
         return cls(layers=layers, **cls._hyperparameters(raw))
 
     def train(self, x, y):
+        """Mini-batch gradient descent: every epoch visits the samples once, in
+        a new order, and updates the weights after each batch.
+
+        The order comes from the seed, so the same network trained on the same
+        data always ends up with the same weights. A batch_size of at least
+        len(x) gives plain full-batch descent.
+        """
+        rng = np.random.default_rng(self.seed)
         for _ in range(self.epochs):
-            output = self.forward(x)
-            self.backward((output - y) / len(x))
-            self.update(self.learning_rate)
+            order = rng.permutation(len(x))
+            for start in range(0, len(x), self.batch_size):
+                batch = order[start:start + self.batch_size]
+                output = self.forward(x[batch])
+                self.backward((output - y[batch]) / len(batch))
+                self.update(self.learning_rate)
