@@ -161,9 +161,9 @@ def test_check_conf_rejects_hyperparameters_that_are_not_an_object():
         check(VALID_CONF | {"hyperparameters": [10, 0.5]})
 
 
-@pytest.mark.parametrize("key", ["epochs", "seed"])
+@pytest.mark.parametrize("key", ["epochs", "seed", "batch_size"])
 @pytest.mark.parametrize("value", ["10", 10.5, None, True])
-def test_check_conf_rejects_a_non_integer_epochs_or_seed(key, value):
+def test_check_conf_rejects_a_non_integer_epochs_seed_or_batch_size(key, value):
     with pytest.raises(GeneratorError, match=f"'{key}' must be an integer"):
         check(VALID_CONF | {"hyperparameters": {key: value}})
 
@@ -172,6 +172,18 @@ def test_check_conf_rejects_a_non_integer_epochs_or_seed(key, value):
 def test_check_conf_rejects_epochs_that_are_not_positive(epochs):
     with pytest.raises(GeneratorError, match="'epochs' must be positive"):
         check(VALID_CONF | {"hyperparameters": {"epochs": epochs}})
+
+
+@pytest.mark.parametrize("batch_size", [0, -5])
+def test_check_conf_rejects_a_batch_size_that_is_not_positive(batch_size):
+    with pytest.raises(GeneratorError, match="'batch_size' must be positive"):
+        check(VALID_CONF | {"hyperparameters": {"batch_size": batch_size}})
+
+
+@pytest.mark.parametrize("batch_size", [1, 64, 100_000])
+def test_check_conf_accepts_a_positive_batch_size(batch_size):
+    """A batch bigger than the dataset is allowed: it means full-batch descent."""
+    check(VALID_CONF | {"hyperparameters": {"batch_size": batch_size}})
 
 
 def test_check_conf_accepts_a_negative_seed():
@@ -354,6 +366,8 @@ def test_a_valid_fixture_is_accepted(name):
     ("hyperparameters_not_an_object.conf", "'hyperparameters' must be an object"),
     ("epochs_not_an_integer.conf", "'epochs' must be an integer"),
     ("epochs_not_positive.conf", "'epochs' must be positive"),
+    ("batch_size_not_an_integer.conf", "'batch_size' must be an integer"),
+    ("batch_size_not_positive.conf", "'batch_size' must be positive"),
     ("seed_not_an_integer.conf", "'seed' must be an integer"),
     ("learning_rate_not_a_number.conf", "'learning_rate' must be a number"),
     ("learning_rate_not_positive.conf", "'learning_rate' must be positive"),
@@ -412,6 +426,8 @@ def test_main_generates_a_network_from_a_valid_fixture(name, tmp_path, monkeypat
     "hyperparameters_not_an_object.conf",
     "epochs_not_an_integer.conf",
     "epochs_not_positive.conf",
+    "batch_size_not_an_integer.conf",
+    "batch_size_not_positive.conf",
     "seed_not_an_integer.conf",
     "learning_rate_not_a_number.conf",
     "learning_rate_not_positive.conf",
@@ -472,3 +488,11 @@ def test_the_deep_fixture_produces_the_shape_it_describes(tmp_path, monkeypatch)
     assert [layer.activation.name for layer in net.layers] == [
         "relu", "relu", "tanh", "sigmoid",
     ]
+
+
+def test_a_configured_batch_size_reaches_the_generated_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    conf = tmp_path / "batched.conf"
+    conf.write_text(json.dumps(VALID_CONF | {"hyperparameters": {"batch_size": 16}}))
+    assert main([str(conf), "1"]) == 0
+    assert Neural_network_module.load("batched_1.nn").batch_size == 16
