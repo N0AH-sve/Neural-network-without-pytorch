@@ -21,8 +21,7 @@ def test_input_size_is_769():
 def test_shape_and_values():
     x = encode(START)
     assert x.shape == (INPUT_SIZE,)
-    assert x.dtype == np.float64
-    assert set(np.unique(x)) <= {0.0, 1.0}
+    assert x.dtype == np.bool_
 
 
 def test_one_value_per_piece():
