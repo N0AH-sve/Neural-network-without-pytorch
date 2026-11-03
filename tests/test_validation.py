@@ -126,3 +126,81 @@ def test_another_seed_holds_out_other_samples(data):
 def test_epoch_metrics_are_frozen():
     with pytest.raises(dataclasses.FrozenInstanceError):
         EpochMetrics(1, 0.5).loss = 0.1
+
+
+def script(net, validation_losses):
+    """Replace the epoch work with a script: epoch e sets every weight to e and
+    reports the e-th validation loss. Lets a test choose exactly when the
+    validation loss improves, and see which epoch's weights end up kept."""
+    epochs = iter(range(1, len(validation_losses) + 1))
+    losses = iter(validation_losses)
+
+    def train_epoch(x, y, order):
+        epoch = next(epochs)
+        for layer in net.layers:
+            layer.w = np.full_like(layer.w, epoch)
+        return 1.0
+
+    net._train_epoch = train_epoch
+    net._validate = lambda x, y: (next(losses), 0.5)
+
+
+def kept_epoch(net):
+    return int(net.layers[0].w[0, 0])
+
+
+@pytest.mark.parametrize("losses, patience, stopped_at, kept", [
+    ([5, 4, 3, 3.5, 3.2, 3.1, 1], 3, 6, 3),       # 3 epochs without beating 3
+    ([5, 4, 4.5, 4.4, 3, 3.1, 3.2, 3.3], 3, 8, 5),  # epoch 5 resets the count
+    ([2, 2, 2, 2], 3, 4, 1),                       # equal is not better
+    ([5, 6, 1], 1, 2, 1),                          # patience 1: first miss stops
+])
+def test_training_stops_after_patience_epochs_without_improvement(data, losses, patience,
+                                                                  stopped_at, kept):
+    x, y = data
+    net = network(epochs=len(losses), patience=patience)
+    script(net, losses)
+    history = net.train(x, y)
+    assert history[-1].epoch == stopped_at
+    assert kept_epoch(net) == kept
+
+
+def test_improving_every_epoch_runs_them_all(data):
+    x, y = data
+    net = network(epochs=4, patience=1)
+    script(net, [5, 4, 3, 2])
+    assert len(net.train(x, y)) == 4
+    assert kept_epoch(net) == 4
+
+
+def test_the_best_weights_are_kept_even_without_stopping(data):
+    """The epoch limit came first, but the last epoch was not the best one."""
+    x, y = data
+    net = network(epochs=3, patience=5)
+    script(net, [3, 2, 2.5])
+    assert len(net.train(x, y)) == 3
+    assert kept_epoch(net) == 2
+
+
+def test_without_validation_every_epoch_runs(data):
+    x, y = data
+    assert len(network(epochs=6, validation_split=0.0, patience=1).train(x, y)) == 6
+
+
+def test_on_random_labels_training_stops_and_keeps_the_best_epoch():
+    """Nothing general can be learned from random labels: the validation loss
+    soon stops improving, so training must stop long before the limit."""
+    rng = np.random.default_rng(2)
+    x = rng.normal(size=(60, 4))
+    x[:, 0] = np.arange(60)
+    y = np.eye(2)[rng.integers(0, 2, 60)]
+    net = Neural_network_module([4, 32, 2], epochs=500, learning_rate=0.05,
+                                batch_size=8, patience=3)
+    calls = record_forward(net)
+    history = net.train(x, y)
+    best = min(history, key=lambda m: m.validation_loss)
+    assert history[-1].epoch < 500
+    assert history[-1].epoch - best.epoch == 3
+    held_out = calls[-1]
+    output = net.forward(x[held_out])
+    assert np.mean((output - y[held_out]) ** 2) == pytest.approx(best.validation_loss)
