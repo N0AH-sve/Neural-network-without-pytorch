@@ -40,6 +40,15 @@ class Neural_network_module:
             x = layer.forward(x)
         return x
 
+    def forward_in_batches(self, x, batch_size : int = 4096):
+        """Same result as forward(x), computed on slices of batch_size samples:
+        only one slice at a time is turned into floats, so a large boolean
+        input never needs its full float64 copy in memory."""
+        if len(x) == 0:
+            return self.forward(x)
+        return np.concatenate([self.forward(x[start:start + batch_size])
+                               for start in range(0, len(x), batch_size)])
+
     def backward(self, grad):
         for layer in reversed(self.layers):
             grad = layer.backward(grad)
