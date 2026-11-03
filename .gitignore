@@ -17,4 +17,4 @@ dist/
 # project data
 *.nn
 !loading_files/*.nn
-datasets/
+dataset/
