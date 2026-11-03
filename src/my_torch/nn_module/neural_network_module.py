@@ -4,6 +4,7 @@ from my_torch.nn_module.layer import Layer
 
 EPOCH = 2000
 LEARNING_RATE = 0.005
+BATCH_SIZE = 64
 SEED = 42 # everyone have 42 <
 FORMAT_VERSION = 1
 
@@ -14,10 +15,11 @@ FORMAT_VERSION = 1
 class Neural_network_module:
     def __init__(self, int_layers : list[int] | None = None, epochs : int = EPOCH,
                  learning_rate : float = LEARNING_RATE, seed : int = SEED,
-                 layers : list[Layer] | None = None):
+                 layers : list[Layer] | None = None, batch_size : int = BATCH_SIZE):
         self.epochs = epochs
         self.learning_rate = learning_rate
         self.seed = seed
+        self.batch_size = batch_size
         self.layers = self._init_layers(int_layers) if layers is None else layers
         self.version = 1
 
@@ -52,6 +54,7 @@ class Neural_network_module:
                 "epochs": self.epochs,
                 "learning_rate": self.learning_rate,
                 "seed": self.seed,
+                "batch_size": self.batch_size,
             },
             "data": {
                 "layers": [
@@ -79,6 +82,7 @@ class Neural_network_module:
             "epochs": hyper.get("epochs", EPOCH),
             "learning_rate": hyper.get("learning_rate", LEARNING_RATE),
             "seed": hyper.get("seed", SEED),
+            "batch_size": hyper.get("batch_size", BATCH_SIZE),
         }
 
     @classmethod
