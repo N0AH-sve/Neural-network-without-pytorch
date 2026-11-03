@@ -1,4 +1,5 @@
 import json
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -11,6 +12,16 @@ VALIDATION_SPLIT = 0.2
 PATIENCE = 3
 SEED = 42 # everyone have 42 <
 FORMAT_VERSION = 1
+
+@dataclass(frozen=True)
+class EpochMetrics:
+    """What one training epoch measured; validation fields are None without
+    validation samples."""
+    epoch: int
+    loss: float
+    validation_loss: float | None = None
+    validation_accuracy: float | None = None
+
 
 # choice Active_fct between sigmoid fcttanh, relU, soft plus expo linera https://www.geeksforgeeks.org/machine-learning/activation-functions-neural-networks/
 # choice weight there is a lot of method
@@ -148,19 +159,53 @@ class Neural_network_module:
 
         return cls(layers=layers, **cls._hyperparameters(raw))
 
-    def train(self, x, y):
-        """Mini-batch gradient descent: every epoch visits the samples once, in
-        a new order, and updates the weights after each batch.
+    def train(self, x, y) -> list[EpochMetrics]:
+        """Mini-batch gradient descent on x, keeping validation_split of the
+        samples aside to measure the network on data it never learns from.
 
-        The order comes from the seed, so the same network trained on the same
-        data always ends up with the same weights. A batch_size of at least
-        len(x) gives plain full-batch descent.
+        The validation samples are drawn once, then every epoch visits the
+        other samples in a new order. Both orders come from the seed, so the
+        same network trained on the same data always ends up with the same
+        weights. Returns what each epoch measured.
         """
         rng = np.random.default_rng(self.seed)
-        for _ in range(self.epochs):
-            order = rng.permutation(len(x))
-            for start in range(0, len(x), self.batch_size):
-                batch = order[start:start + self.batch_size]
-                output = self.forward(x[batch])
-                self.backward((output - y[batch]) / len(batch))
-                self.update(self.learning_rate)
+        training, validation = self._split(len(x), rng)
+        x_validation, y_validation = x[validation], y[validation]
+        history = []
+        for epoch in range(1, self.epochs + 1):
+            loss = self._train_epoch(x, y, rng.permutation(training))
+            history.append(EpochMetrics(epoch, loss, *self._validate(x_validation, y_validation)))
+        return history
+
+    def _split(self, n : int, rng : np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
+        """Training and validation indices: validation_split of the n samples
+        are kept aside, but at least one is always left to train on."""
+        order = rng.permutation(n)
+        size = max(0, min(round(n * self.validation_split), n - 1))
+        return order[size:], order[:size]
+
+    def _train_epoch(self, x, y, order : np.ndarray) -> float:
+        """One update per batch of batch_size samples, taken in the given
+        order; returns the mean squared error over the epoch."""
+        squared_error = 0.0
+        for start in range(0, len(order), self.batch_size):
+            batch = order[start:start + self.batch_size]
+            squared_error += self._step(x[batch], y[batch])
+        return squared_error / max(1, len(order) * self.layers[-1].output)
+
+    def _step(self, x, y) -> float:
+        """Forward, backward and update on one batch; returns its summed squared error."""
+        error = self.forward(x) - y
+        self.backward(error / len(x))
+        self.update(self.learning_rate)
+        return float(np.sum(error ** 2))
+
+    def _validate(self, x, y) -> tuple[float | None, float | None]:
+        """Mean squared error and accuracy on samples never trained on. The
+        accuracy is the share of samples whose largest output is where the
+        target is largest, which is meaningful for one-hot targets."""
+        if len(x) == 0:
+            return None, None
+        output = self.forward_in_batches(x)
+        accuracy = float(np.mean(output.argmax(axis=1) == y.argmax(axis=1)))
+        return float(np.mean((output - y) ** 2)), accuracy
