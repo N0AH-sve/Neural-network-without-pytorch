@@ -8,6 +8,7 @@ from my_torch.nn_module.layer import Layer
 from my_torch.nn_module.neural_network_module import (
     BATCH_SIZE,
     EPOCH,
+    LOSS,
     PATIENCE,
     VALIDATION_SPLIT,
     FORMAT_VERSION,
@@ -219,3 +220,48 @@ def test_a_config_can_set_the_validation():
             "hyperparameters": {"validation_split": 0.0, "patience": 1}}
     network = Neural_network_module.from_config(conf)
     assert (network.validation_split, network.patience) == (0.0, 1)
+
+
+def test_loss_defaults_to_cross_entropy():
+    assert Neural_network_module([2, 1]).loss == LOSS == "cross_entropy"
+
+
+@pytest.mark.parametrize("loss", ["mse", "cross_entropy"])
+def test_loss_survives_a_save_and_load(tmp_path, loss):
+    path = tmp_path / "net.nn"
+    Neural_network_module([2, 1], loss=loss).save(str(path))
+    assert json.loads(path.read_text())["hyperparameters"]["loss"] == loss
+    assert Neural_network_module.load(str(path)).loss == loss
+
+
+def test_the_loss_name_is_normalised():
+    assert Neural_network_module([2, 1], loss=" MSE ").loss == "mse"
+
+
+def test_an_unknown_loss_is_rejected_when_the_network_is_built():
+    with pytest.raises(ValueError, match="unknown loss 'hinge'"):
+        Neural_network_module([2, 1], loss="hinge")
+
+
+def test_an_unknown_loss_in_a_file_is_rejected_when_loading(tmp_path):
+    path = tmp_path / "net.nn"
+    Neural_network_module([2, 1]).save(str(path))
+    saved = json.loads(path.read_text())
+    saved["hyperparameters"]["loss"] = "hinge"
+    path.write_text(json.dumps(saved))
+    with pytest.raises(ValueError, match="unknown loss 'hinge'"):
+        Neural_network_module.load(str(path))
+
+
+@pytest.mark.parametrize("name", [
+    "valid.nn",
+    "valid_no_hyperparameters.nn",
+    "valid_partial_hyperparameters.nn",
+])
+def test_files_written_before_the_loss_get_cross_entropy(name):
+    assert Neural_network_module.load(fixture(name)).loss == LOSS
+
+
+def test_a_config_can_choose_the_loss():
+    conf = {"layers": [4, 3], "activations": ["relu"], "hyperparameters": {"loss": "mse"}}
+    assert Neural_network_module.from_config(conf).loss == "mse"

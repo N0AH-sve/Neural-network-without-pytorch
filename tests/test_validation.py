@@ -258,3 +258,25 @@ def test_history_best_is_the_epoch_whose_weights_were_kept(data, losses, patienc
 def test_without_validation_there_is_no_best_epoch(data):
     x, y = data
     assert network(epochs=2, validation_split=0.0).train(x, y).best is None
+
+
+@pytest.mark.parametrize("loss", ["mse", "cross_entropy"])
+def test_training_follows_the_chosen_loss(data, loss):
+    """The validation loss reported is the chosen loss of the kept network."""
+    x, y = data
+    net = network(epochs=3, loss=loss)
+    calls = record_forward(net)
+    best = net.train(x, y).best
+    held_out = calls[-1]
+    expected = losses.get(loss).value(net.forward(x[held_out]), y[held_out])
+    assert best.validation_loss == pytest.approx(expected)
+
+
+def test_the_two_losses_train_differently(data):
+    x, y = data
+    mse = network(epochs=3, loss="mse", validation_split=0.0)
+    cross_entropy = copy.deepcopy(mse)
+    cross_entropy.loss = "cross_entropy"
+    mse.train(x, y)
+    cross_entropy.train(x, y)
+    assert not np.array_equal(mse.layers[-1].b, cross_entropy.layers[-1].b)
