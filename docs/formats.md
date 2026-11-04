@@ -27,10 +27,11 @@ them may be left out, which gives the default:
 | `validation_split` | `0.2` | share of the boards kept aside, never trained on, to measure the network; `0` turns validation and early stopping off |
 | `patience` | `3` | epochs in a row without a lower validation loss before training stops |
 | `seed` | `42` | which boards are kept for validation, and the order of the others at each epoch |
+| `loss` | `cross_entropy` | what training minimises: `cross_entropy` (softmax applied to the raw outputs, then minus the log-probability of the right class) or `mse` (half the squared error) |
 
 `epochs`, `batch_size` and `patience` must be positive integers,
 `learning_rate` a positive number, `validation_split` a number in `[0, 1)`,
-`seed` any integer. `.nn` files written before a key existed load with its
+`seed` any integer, `loss` one of `cross_entropy` and `mse`. `.nn` files written before a key existed load with its
 default.
 
 ## Chessboard file
