@@ -20,7 +20,9 @@ def data():
 
 
 def network(**hyperparameters):
-    return Neural_network_module([4, 3, 2], learning_rate=0.01, **hyperparameters)
+    """No validation split: these tests are about the batches over all samples."""
+    return Neural_network_module([4, 3, 2], learning_rate=0.01, validation_split=0.0,
+                                 **hyperparameters)
 
 
 def record_batches(net):

@@ -24,11 +24,14 @@ them may be left out, which gives the default:
 | `epochs` | `20` | passes over the training boards |
 | `learning_rate` | `0.005` | size of each gradient step |
 | `batch_size` | `64` | boards per weight update; at least the number of boards gives full-batch descent |
-| `seed` | `42` | order in which the boards are shuffled at each epoch |
+| `validation_split` | `0.2` | share of the boards kept aside, never trained on, to measure the network; `0` turns validation and early stopping off |
+| `patience` | `3` | epochs in a row without a lower validation loss before training stops |
+| `seed` | `42` | which boards are kept for validation, and the order of the others at each epoch |
 
-`epochs` and `batch_size` must be positive integers, `learning_rate` a positive
-number, `seed` any integer. `.nn` files written before `batch_size` existed load
-with the default.
+`epochs`, `batch_size` and `patience` must be positive integers,
+`learning_rate` a positive number, `validation_split` a number in `[0, 1)`,
+`seed` any integer. `.nn` files written before a key existed load with its
+default.
 
 ## Chessboard file
 
