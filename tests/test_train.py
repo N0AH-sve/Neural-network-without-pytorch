@@ -176,9 +176,9 @@ def test_one_progress_line_per_epoch_then_the_report(tmp_path, loadfile, capsys)
 def test_without_validation_the_progress_line_has_only_the_loss(tmp_path, always_nothing,
                                                                 capsys):
     """Every board gets [1, 0, 0]: 2 boards out of 3 are off by 1 on two outputs,
-    so the mean squared error is 4 / 9."""
+    so the loss (half the summed squared error per board) is 0.5 * 4 / 3."""
     train(Arguments("train", str(always_nothing), str(chessfile(tmp_path, TRAINING_LINES))))
-    assert capsys.readouterr().out.splitlines()[0] == "epoch 1/1: loss 0.4444"
+    assert capsys.readouterr().out.splitlines()[0] == "epoch 1/1: loss 0.6667"
 
 
 @pytest.fixture

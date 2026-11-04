@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from my_torch.nn_module import losses
 from my_torch.nn_module.layer import Layer
 
 EPOCH = 20
@@ -14,8 +15,7 @@ PATIENCE = 3
 SEED = 42 # everyone have 42 <
 FORMAT_VERSION = 1
 
-def _mean_squared_error(output, target) -> float:
-    return float(np.mean((output - target) ** 2))
+_LOSS = losses.get("mse")
 
 
 @dataclass(frozen=True)
@@ -252,9 +252,9 @@ class Neural_network_module:
     def _step(self, x, y) -> float:
         """Forward, backward and update on one batch; returns its loss."""
         output = self.forward(x)
-        self.backward((output - y) / len(x))
+        self.backward(_LOSS.gradient(output, y))
         self.update(self.learning_rate)
-        return _mean_squared_error(output, y)
+        return _LOSS.value(output, y)
 
     def _validate(self, x, y) -> dict:
         """The validation fields of EpochMetrics, measured on samples never
@@ -265,6 +265,6 @@ class Neural_network_module:
             return {}
         output = self.forward_in_batches(x)
         return {
-            "validation_loss": _mean_squared_error(output, y),
+            "validation_loss": _LOSS.value(output, y),
             "validation_accuracy": float(np.mean(output.argmax(axis=1) == y.argmax(axis=1))),
         }

@@ -4,6 +4,7 @@ import dataclasses
 import numpy as np
 import pytest
 
+from my_torch.nn_module import losses
 from my_torch.nn_module.neural_network_module import EpochMetrics, Neural_network_module
 
 N_SAMPLES = 10
@@ -92,7 +93,7 @@ def test_validation_metrics_describe_the_network_after_the_epoch(data):
     last = net.train(x, y)[-1]
     held_out = calls[-1]
     output = net.forward(x[held_out])
-    assert last.validation_loss == pytest.approx(np.mean((output - y[held_out]) ** 2))
+    assert last.validation_loss == pytest.approx(losses.mse_value(output, y[held_out]))
     expected = np.mean(output.argmax(axis=1) == y[held_out].argmax(axis=1))
     assert last.validation_accuracy == pytest.approx(expected)
 
@@ -203,7 +204,7 @@ def test_on_random_labels_training_stops_and_keeps_the_best_epoch():
     assert history[-1].epoch - best.epoch == 3
     held_out = calls[-1]
     output = net.forward(x[held_out])
-    assert np.mean((output - y[held_out]) ** 2) == pytest.approx(best.validation_loss)
+    assert losses.mse_value(output, y[held_out]) == pytest.approx(best.validation_loss)
 
 
 def test_on_epoch_receives_every_epoch_in_order(data):
