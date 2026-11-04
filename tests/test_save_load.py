@@ -56,6 +56,7 @@ def test_saved_file_is_split_between_data_and_hyperparameters(tmp_path):
     assert saved["version"] == FORMAT_VERSION
     assert set(saved["hyperparameters"]) == {
         "epochs", "learning_rate", "seed", "batch_size", "validation_split", "patience",
+        "loss",
     }
     assert len(saved["data"]["layers"]) == 2
 

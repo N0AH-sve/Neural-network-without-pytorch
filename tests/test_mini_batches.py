@@ -20,9 +20,10 @@ def data():
 
 
 def network(**hyperparameters):
-    """No validation split: these tests are about the batches over all samples."""
+    """No validation split: these tests are about the batches over all samples.
+    The targets are plain numbers, not classes, hence the squared error."""
     return Neural_network_module([4, 3, 2], learning_rate=0.01, validation_split=0.0,
-                                 **hyperparameters)
+                                 loss="mse", **hyperparameters)
 
 
 def record_batches(net):
@@ -113,14 +114,18 @@ def test_another_seed_gives_other_weights(data):
     other.seed = 8
     net.train(x, y)
     other.train(x, y)
-    assert not np.array_equal(net.layers[0].w, other.layers[0].w)
+    # All weights, not one layer: a layer whose ReLUs all start dead gets no
+    # gradient and stays the same whatever the order.
+    assert any(not np.array_equal(a, b)
+               for a, b in zip(weights(net), weights(other), strict=True))
 
 
 def test_training_lowers_the_loss():
     rng = np.random.default_rng(1)
     x = rng.normal(size=(200, 4))
     y = x @ rng.normal(size=(4, 2))
-    net = Neural_network_module([4, 2], epochs=50, learning_rate=0.05, batch_size=16)
+    net = Neural_network_module([4, 2], epochs=50, learning_rate=0.05, batch_size=16,
+                                loss="mse")
     before = np.mean((net.forward(x) - y) ** 2)
     net.train(x, y)
     assert np.mean((net.forward(x) - y) ** 2) < before / 10

@@ -9,6 +9,7 @@ from my_torch.encoding.chessfile import read_samples
 from my_torch.encoding.features import INPUT_SIZE, encode_all
 from my_torch.encoding.labels import BASIC
 from my_torch.encoding.position import FenError
+from my_torch.nn_module import losses
 from my_torch.nn_module.layer import Layer
 from my_torch.nn_module.neural_network_module import Neural_network_module
 
@@ -34,12 +35,12 @@ def chessfile(tmp_path, lines):
 
 
 def loss(network_path, lines):
-    """Mean squared error of a saved network on labelled lines."""
+    """Loss of a saved network on labelled lines, with the loss it trains with."""
     samples = read_samples(lines)
     x = encode_all(s.position for s in samples)
     y = BASIC.one_hot(s.label for s in samples)
-    output = Neural_network_module.load(str(network_path)).forward(x)
-    return float(np.mean((output - y) ** 2))
+    network = Neural_network_module.load(str(network_path))
+    return losses.get(network.loss).value(network.forward(x), y)
 
 
 def test_save_writes_savefile_and_keeps_loadfile(tmp_path, loadfile):
@@ -59,10 +60,15 @@ def test_without_save_loadfile_is_overwritten(tmp_path, loadfile):
     assert loadfile.read_bytes() != original
 
 
-def test_training_lowers_the_loss(tmp_path, loadfile):
-    before = loss(loadfile, TRAINING_LINES)
-    train(Arguments("train", str(loadfile), str(chessfile(tmp_path, TRAINING_LINES))))
-    assert loss(loadfile, TRAINING_LINES) < before
+def test_training_lowers_the_loss(tmp_path):
+    """No validation: with 3 boards, holding one out would let early stopping
+    keep epoch 1 on the say of a single board."""
+    path = tmp_path / "net.nn"
+    Neural_network_module([INPUT_SIZE, 16, len(BASIC)], epochs=50, learning_rate=0.05,
+                          validation_split=0.0).save(str(path))
+    before = loss(path, TRAINING_LINES)
+    train(Arguments("train", str(path), str(chessfile(tmp_path, TRAINING_LINES))))
+    assert loss(path, TRAINING_LINES) < before
 
 
 def test_hyperparameters_are_kept(tmp_path, loadfile):
@@ -175,10 +181,11 @@ def test_one_progress_line_per_epoch_then_the_report(tmp_path, loadfile, capsys)
 
 def test_without_validation_the_progress_line_has_only_the_loss(tmp_path, always_nothing,
                                                                 capsys):
-    """Every board gets [1, 0, 0]: 2 boards out of 3 are off by 1 on two outputs,
-    so the loss (half the summed squared error per board) is 0.5 * 4 / 3."""
+    """Every board gets the scores [1, 0, 0], so softmax gives Nothing e / (e + 2)
+    and the others 1 / (e + 2): the cross-entropy over the 3 boards is
+    (ln((e + 2) / e) + 2 ln(e + 2)) / 3 = ln(e + 2) - 1 / 3."""
     train(Arguments("train", str(always_nothing), str(chessfile(tmp_path, TRAINING_LINES))))
-    assert capsys.readouterr().out.splitlines()[0] == "epoch 1/1: loss 0.6667"
+    assert capsys.readouterr().out.splitlines()[0] == "epoch 1/1: loss 1.2181"
 
 
 @pytest.fixture
