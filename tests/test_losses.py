@@ -70,3 +70,61 @@ def test_unknown_loss_lists_the_valid_names():
     with pytest.raises(ValueError, match="unknown loss 'mae', expected one of: ") as error:
         losses.get("mae")
     assert all(name in str(error.value) for name in losses.names())
+
+
+def test_softmax_gives_probabilities(sample):
+    output, _ = sample
+    probabilities = losses.softmax(output)
+    assert np.all(probabilities > 0)
+    assert np.allclose(probabilities.sum(axis=1), 1.0)
+
+
+def test_softmax_keeps_the_order_of_the_scores(sample):
+    """So argmax of the raw scores is already the predicted class."""
+    output, _ = sample
+    assert np.array_equal(losses.softmax(output).argmax(axis=1), output.argmax(axis=1))
+
+
+def test_softmax_ignores_a_shift_of_all_scores(sample):
+    output, _ = sample
+    assert np.allclose(losses.softmax(output), losses.softmax(output + 100.0))
+
+
+@pytest.mark.parametrize("scores, target_class, expected", [
+    ([0.0, 0.0, 0.0], 0, np.log(3)),            # no preference: 1/3 each
+    ([np.log(2), 0.0, 0.0], 0, np.log(2)),      # probability 2/4 = 1/2
+    ([20.0, 0.0, 0.0], 0, 0.0),                 # sure and right
+    ([20.0, 0.0, 0.0], 1, 20.0),                # sure and wrong
+])
+def test_cross_entropy_is_minus_the_log_probability_of_the_target(scores, target_class,
+                                                                 expected):
+    value = losses.get("cross_entropy").value(np.array([scores]), np.eye(3)[[target_class]])
+    assert value == pytest.approx(expected, abs=1e-6)
+
+
+def test_cross_entropy_averages_over_the_samples():
+    output = np.zeros((2, 3))
+    target = np.eye(3)[[0, 1]]
+    assert losses.get("cross_entropy").value(output, target) == pytest.approx(np.log(3))
+
+
+def test_cross_entropy_gradient_is_softmax_minus_target(sample):
+    output, target = sample
+    expected = (losses.softmax(output) - target) / len(output)
+    assert np.allclose(losses.get("cross_entropy").gradient(output, target), expected)
+
+
+def test_cross_entropy_gradient_rows_sum_to_zero(sample):
+    """Raising one class's probability lowers the others by as much."""
+    output, target = sample
+    assert np.allclose(losses.get("cross_entropy").gradient(output, target).sum(axis=1), 0.0)
+
+
+def test_huge_scores_do_not_overflow():
+    scores = np.array([[1000.0, -1000.0, 0.0]])
+    target = np.eye(3)[[1]]
+    with np.errstate(over="raise", invalid="raise", divide="raise"):
+        value = losses.get("cross_entropy").value(scores, target)
+        gradient = losses.get("cross_entropy").gradient(scores, target)
+    assert value == pytest.approx(2000.0)
+    assert np.allclose(gradient, [[1.0, -1.0, 0.0]])
