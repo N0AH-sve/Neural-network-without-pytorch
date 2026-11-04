@@ -27,7 +27,7 @@ def test_train_exits_0_and_reports(files, capsys):
     network, boards = files
     assert analyzer.main(["--train", str(network), str(boards)]) == 0
     out, err = capsys.readouterr()
-    assert out.startswith("Number of boards : 3, ")
+    assert out.splitlines()[-1].startswith("Number of boards : 3, ")
     assert err == ""
 
 

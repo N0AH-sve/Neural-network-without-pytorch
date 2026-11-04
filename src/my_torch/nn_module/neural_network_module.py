@@ -1,4 +1,6 @@
 import json
+from collections.abc import Callable
+from dataclasses import dataclass
 
 import numpy as np
 
@@ -7,8 +9,60 @@ from my_torch.nn_module.layer import Layer
 EPOCH = 20
 LEARNING_RATE = 0.005
 BATCH_SIZE = 64
+VALIDATION_SPLIT = 0.2
+PATIENCE = 3
 SEED = 42 # everyone have 42 <
 FORMAT_VERSION = 1
+
+def _mean_squared_error(output, target) -> float:
+    return float(np.mean((output - target) ** 2))
+
+
+@dataclass(frozen=True)
+class EpochMetrics:
+    """What one training epoch measured; validation fields are None without
+    validation samples."""
+    epoch: int
+    loss: float
+    validation_loss: float | None = None
+    validation_accuracy: float | None = None
+
+
+class TrainingHistory(list[EpochMetrics]):
+    """The metrics of every epoch run, in order, and best: the epoch whose
+    weights were kept (None without validation)."""
+    best: EpochMetrics | None = None
+
+
+class _EarlyStopping:
+    """Keeps the weights of the epoch with the lowest validation loss, and
+    tells when patience epochs in a row have not improved on it."""
+
+    def __init__(self, patience : int):
+        self.patience = patience
+        self.best = None
+        self.best_weights = None
+        self.waited = 0
+
+    def record(self, metrics : EpochMetrics, layers : list[Layer]) -> bool:
+        """Take in an epoch, keeping its weights if it is the best so far;
+        True once training should stop. Epochs without validation are ignored."""
+        if metrics.validation_loss is None:
+            return False
+        if self.best is None or metrics.validation_loss < self.best.validation_loss:
+            self.best, self.waited = metrics, 0
+            self.best_weights = [(layer.w.copy(), layer.b.copy()) for layer in layers]
+            return False
+        self.waited += 1
+        return self.waited >= self.patience
+
+    def restore(self, layers : list[Layer]) -> None:
+        """Put the best weights back; does nothing if no epoch was validated."""
+        if self.best_weights is None:
+            return
+        for layer, (w, b) in zip(layers, self.best_weights, strict=True):
+            layer.w, layer.b = w, b
+
 
 # choice Active_fct between sigmoid fcttanh, relU, soft plus expo linera https://www.geeksforgeeks.org/machine-learning/activation-functions-neural-networks/
 # choice weight there is a lot of method
@@ -17,11 +71,14 @@ FORMAT_VERSION = 1
 class Neural_network_module:
     def __init__(self, int_layers : list[int] | None = None, epochs : int = EPOCH,
                  learning_rate : float = LEARNING_RATE, seed : int = SEED,
-                 layers : list[Layer] | None = None, batch_size : int = BATCH_SIZE):
+                 layers : list[Layer] | None = None, batch_size : int = BATCH_SIZE,
+                 validation_split : float = VALIDATION_SPLIT, patience : int = PATIENCE):
         self.epochs = epochs
         self.learning_rate = learning_rate
         self.seed = seed
         self.batch_size = batch_size
+        self.validation_split = validation_split
+        self.patience = patience
         self.layers = self._init_layers(int_layers) if layers is None else layers
         self.version = 1
 
@@ -66,6 +123,8 @@ class Neural_network_module:
                 "learning_rate": self.learning_rate,
                 "seed": self.seed,
                 "batch_size": self.batch_size,
+                "validation_split": self.validation_split,
+                "patience": self.patience,
             },
             "data": {
                 "layers": [
@@ -94,6 +153,8 @@ class Neural_network_module:
             "learning_rate": hyper.get("learning_rate", LEARNING_RATE),
             "seed": hyper.get("seed", SEED),
             "batch_size": hyper.get("batch_size", BATCH_SIZE),
+            "validation_split": hyper.get("validation_split", VALIDATION_SPLIT),
+            "patience": hyper.get("patience", PATIENCE),
         }
 
     @classmethod
@@ -139,19 +200,71 @@ class Neural_network_module:
 
         return cls(layers=layers, **cls._hyperparameters(raw))
 
-    def train(self, x, y):
-        """Mini-batch gradient descent: every epoch visits the samples once, in
-        a new order, and updates the weights after each batch.
+    def train(self, x, y,
+              on_epoch : Callable[[EpochMetrics], None] | None = None) -> TrainingHistory:
+        """Mini-batch gradient descent on x, keeping validation_split of the
+        samples aside to measure the network on data it never learns from.
 
-        The order comes from the seed, so the same network trained on the same
-        data always ends up with the same weights. A batch_size of at least
-        len(x) gives plain full-batch descent.
+        The validation samples are drawn once, then every epoch visits the
+        other samples in a new order. Both orders come from the seed, so the
+        same network trained on the same data always ends up with the same
+        weights.
+
+        Training stops early once the validation loss has not improved for
+        patience epochs, and the weights of the best epoch are put back: the
+        epochs after it were only learning the training samples by heart.
+        Returns what each epoch measured, up to the one where it stopped;
+        on_epoch, if given, also receives each epoch's metrics as soon as the
+        epoch ends, e.g. to show progress.
         """
         rng = np.random.default_rng(self.seed)
-        for _ in range(self.epochs):
-            order = rng.permutation(len(x))
-            for start in range(0, len(x), self.batch_size):
-                batch = order[start:start + self.batch_size]
-                output = self.forward(x[batch])
-                self.backward((output - y[batch]) / len(batch))
-                self.update(self.learning_rate)
+        training, validation = self._split(len(x), rng)
+        x_validation, y_validation = x[validation], y[validation]
+        stopping = _EarlyStopping(self.patience)
+        history = TrainingHistory()
+        for epoch in range(1, self.epochs + 1):
+            loss = self._train_epoch(x, y, rng.permutation(training))
+            metrics = EpochMetrics(epoch, loss, **self._validate(x_validation, y_validation))
+            history.append(metrics)
+            if on_epoch is not None:
+                on_epoch(metrics)
+            if stopping.record(metrics, self.layers):
+                break
+        stopping.restore(self.layers)
+        history.best = stopping.best
+        return history
+
+    def _split(self, n : int, rng : np.random.Generator) -> tuple[np.ndarray, np.ndarray]:
+        """Training and validation indices: validation_split of the n samples
+        are kept aside, but at least one is always left to train on."""
+        order = rng.permutation(n)
+        size = max(0, min(round(n * self.validation_split), n - 1))
+        return order[size:], order[:size]
+
+    def _train_epoch(self, x, y, order : np.ndarray) -> float:
+        """One update per batch of batch_size samples, taken in the given
+        order; returns the epoch's loss, each batch weighing by its size."""
+        batches = [order[start:start + self.batch_size]
+                   for start in range(0, len(order), self.batch_size)]
+        losses = [self._step(x[batch], y[batch]) for batch in batches]
+        return float(np.average(losses, weights=[len(b) for b in batches])) if batches else 0.0
+
+    def _step(self, x, y) -> float:
+        """Forward, backward and update on one batch; returns its loss."""
+        output = self.forward(x)
+        self.backward((output - y) / len(x))
+        self.update(self.learning_rate)
+        return _mean_squared_error(output, y)
+
+    def _validate(self, x, y) -> dict:
+        """The validation fields of EpochMetrics, measured on samples never
+        trained on; none without such samples. The accuracy is the share of
+        samples whose largest output is where the target is largest, which is
+        meaningful for one-hot targets."""
+        if len(x) == 0:
+            return {}
+        output = self.forward_in_batches(x)
+        return {
+            "validation_loss": _mean_squared_error(output, y),
+            "validation_accuracy": float(np.mean(output.argmax(axis=1) == y.argmax(axis=1))),
+        }
