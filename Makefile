@@ -6,6 +6,7 @@
 ##
 
 UV              :=      uv
+PYTHON          :=      python3
 
 ANALYZER        :=      my_torch_analyzer
 GENERATOR       :=      my_torch_generator
@@ -23,13 +24,15 @@ all: $(BINARIES)
 install:
 	$(UV) sync
 
-$(ANALYZER): install
-	@printf '#!/bin/sh\nexport OPENBLAS_NUM_THREADS="$${OPENBLAS_NUM_THREADS:-$(BLAS_THREADS)}"\nexec uv run --quiet python -m my_torch.analyser.analyzer "$$@"\n' > $@
+# The binaries run the sources with the system $(PYTHON) and its numpy, so they
+# work without uv (the grading machine has none); uv is only for development.
+$(ANALYZER):
+	@printf '#!/bin/sh\nexport OPENBLAS_NUM_THREADS="$${OPENBLAS_NUM_THREADS:-$(BLAS_THREADS)}"\nexport PYTHONPATH="$$(dirname "$$0")/src$${PYTHONPATH:+:$$PYTHONPATH}"\nexec $(PYTHON) -m my_torch.analyser.analyzer "$$@"\n' > $@
 	@chmod +x $@
 	@echo "$@ ready"
 
-$(GENERATOR): install
-	@printf '#!/bin/sh\nexec uv run --quiet python -m my_torch.generator.generator "$$@"\n' > $@
+$(GENERATOR):
+	@printf '#!/bin/sh\nexport PYTHONPATH="$$(dirname "$$0")/src$${PYTHONPATH:+:$$PYTHONPATH}"\nexec $(PYTHON) -m my_torch.generator.generator "$$@"\n' > $@
 	@chmod +x $@
 	@echo "$@ ready"
 
@@ -51,7 +54,7 @@ re: fclean all
 
 help:
 	@echo "all        build the binaries"
-	@echo "install    sync the uv environment"
+	@echo "install    sync the uv development environment"
 	@echo "run        run the analyzer with --help"
 	@echo "tests_run  run the test suite"
 	@echo "clean      remove caches"
