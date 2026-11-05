@@ -210,6 +210,18 @@ def test_check_conf_accepts_a_validation_split_in_range(split):
     check(VALID_CONF | {"hyperparameters": {"validation_split": split}})
 
 
+@pytest.mark.parametrize("loss", ["hinge", "", 5, None, True])
+def test_check_conf_rejects_an_unknown_loss(loss):
+    with pytest.raises(GeneratorError, match="unknown loss") as error:
+        check(VALID_CONF | {"hyperparameters": {"loss": loss}})
+    assert "cross_entropy" in str(error.value) and "mse" in str(error.value)
+
+
+@pytest.mark.parametrize("loss", ["mse", "cross_entropy", " MSE "])
+def test_check_conf_accepts_a_known_loss(loss):
+    check(VALID_CONF | {"hyperparameters": {"loss": loss}})
+
+
 def test_check_conf_accepts_a_negative_seed():
     """Unlike epochs, a seed has no sign constraint."""
     check(VALID_CONF | {"hyperparameters": {"seed": -42}})
@@ -396,6 +408,7 @@ def test_a_valid_fixture_is_accepted(name):
     ("patience_not_positive.conf", "'patience' must be positive"),
     ("validation_split_not_a_number.conf", "'validation_split' must be a number"),
     ("validation_split_out_of_range.conf", "'validation_split' must be in [0, 1)"),
+    ("unknown_loss.conf", "unknown loss 'hinge'"),
     ("seed_not_an_integer.conf", "'seed' must be an integer"),
     ("learning_rate_not_a_number.conf", "'learning_rate' must be a number"),
     ("learning_rate_not_positive.conf", "'learning_rate' must be positive"),
@@ -460,6 +473,7 @@ def test_main_generates_a_network_from_a_valid_fixture(name, tmp_path, monkeypat
     "patience_not_positive.conf",
     "validation_split_not_a_number.conf",
     "validation_split_out_of_range.conf",
+    "unknown_loss.conf",
     "seed_not_an_integer.conf",
     "learning_rate_not_a_number.conf",
     "learning_rate_not_positive.conf",
@@ -538,3 +552,11 @@ def test_configured_validation_settings_reach_the_generated_file(tmp_path, monke
     assert main([str(conf), "1"]) == 0
     network = Neural_network_module.load("validated_1.nn")
     assert (network.validation_split, network.patience) == (0.1, 7)
+
+
+def test_a_configured_loss_reaches_the_generated_file(tmp_path, monkeypatch):
+    monkeypatch.chdir(tmp_path)
+    conf = tmp_path / "squared.conf"
+    conf.write_text(json.dumps(VALID_CONF | {"hyperparameters": {"loss": "mse"}}))
+    assert main([str(conf), "1"]) == 0
+    assert Neural_network_module.load("squared_1.nn").loss == "mse"

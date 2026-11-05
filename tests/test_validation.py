@@ -4,6 +4,7 @@ import dataclasses
 import numpy as np
 import pytest
 
+from my_torch.nn_module import losses
 from my_torch.nn_module.neural_network_module import EpochMetrics, Neural_network_module
 
 N_SAMPLES = 10
@@ -85,16 +86,18 @@ def test_without_validation_the_fields_are_none(data):
                for m in history)
 
 
-def test_validation_metrics_describe_the_network_after_the_epoch(data):
+def test_validation_metrics_describe_the_network_that_was_kept(data):
+    """After training the network holds the best epoch's weights, so measuring
+    it by hand must give that epoch's metrics, whichever epoch came last."""
     x, y = data
     net = network(epochs=2, batch_size=4)
     calls = record_forward(net)
-    last = net.train(x, y)[-1]
+    best = net.train(x, y).best
     held_out = calls[-1]
     output = net.forward(x[held_out])
-    assert last.validation_loss == pytest.approx(np.mean((output - y[held_out]) ** 2))
+    assert best.validation_loss == pytest.approx(losses.get(net.loss).value(output, y[held_out]))
     expected = np.mean(output.argmax(axis=1) == y[held_out].argmax(axis=1))
-    assert last.validation_accuracy == pytest.approx(expected)
+    assert best.validation_accuracy == pytest.approx(expected)
 
 
 def test_training_loss_goes_down():
@@ -102,7 +105,7 @@ def test_training_loss_goes_down():
     x = rng.normal(size=(200, 4))
     y = x @ rng.normal(size=(4, 2))
     history = Neural_network_module([4, 2], epochs=30, learning_rate=0.05,
-                                    batch_size=16).train(x, y)
+                                    batch_size=16, loss="mse").train(x, y)
     assert history[-1].loss < history[0].loss / 10
     assert history[-1].validation_loss < history[0].validation_loss / 10
 
@@ -203,7 +206,7 @@ def test_on_random_labels_training_stops_and_keeps_the_best_epoch():
     assert history[-1].epoch - best.epoch == 3
     held_out = calls[-1]
     output = net.forward(x[held_out])
-    assert np.mean((output - y[held_out]) ** 2) == pytest.approx(best.validation_loss)
+    assert losses.get(net.loss).value(output, y[held_out]) == pytest.approx(best.validation_loss)
 
 
 def test_on_epoch_receives_every_epoch_in_order(data):
@@ -255,3 +258,25 @@ def test_history_best_is_the_epoch_whose_weights_were_kept(data, losses, patienc
 def test_without_validation_there_is_no_best_epoch(data):
     x, y = data
     assert network(epochs=2, validation_split=0.0).train(x, y).best is None
+
+
+@pytest.mark.parametrize("loss", ["mse", "cross_entropy"])
+def test_training_follows_the_chosen_loss(data, loss):
+    """The validation loss reported is the chosen loss of the kept network."""
+    x, y = data
+    net = network(epochs=3, loss=loss)
+    calls = record_forward(net)
+    best = net.train(x, y).best
+    held_out = calls[-1]
+    expected = losses.get(loss).value(net.forward(x[held_out]), y[held_out])
+    assert best.validation_loss == pytest.approx(expected)
+
+
+def test_the_two_losses_train_differently(data):
+    x, y = data
+    mse = network(epochs=3, loss="mse", validation_split=0.0)
+    cross_entropy = copy.deepcopy(mse)
+    cross_entropy.loss = "cross_entropy"
+    mse.train(x, y)
+    cross_entropy.train(x, y)
+    assert not np.array_equal(mse.layers[-1].b, cross_entropy.layers[-1].b)
