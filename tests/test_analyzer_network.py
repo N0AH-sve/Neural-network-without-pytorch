@@ -37,9 +37,9 @@ def test_wrong_input_size(tmp_path, inputs):
         load_network(saved(tmp_path, [inputs, 8, len(BASIC)]))
 
 
-@pytest.mark.parametrize("outputs", [1, 2, 5])
+@pytest.mark.parametrize("outputs", [1, 2, 4, 6])
 def test_wrong_output_size(tmp_path, outputs):
-    with pytest.raises(ValueError, match=f"has {outputs} outputs, expected 3"):
+    with pytest.raises(ValueError, match=f"{outputs} output neurons, expected one of: 3, 5"):
         load_network(saved(tmp_path, [INPUT_SIZE, 8, outputs]))
 
 
