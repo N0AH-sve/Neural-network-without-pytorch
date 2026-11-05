@@ -17,4 +17,5 @@ dist/
 # project data
 *.nn
 !loading_files/*.nn
+!/my_torch_network.nn
 dataset/
