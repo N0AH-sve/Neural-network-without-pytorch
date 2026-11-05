@@ -18,6 +18,7 @@
 │   ├── generator/generator.py    entry point of my_torch_generator
 │   ├── nn_module/                generic neural network module
 │   │   ├── activations.py        linear, sigmoid, tanh, relu and their derivatives
+│   │   ├── losses.py             mean squared error, softmax cross-entropy: value and gradient
 │   │   ├── layer.py              dense layer: forward, backward, update
 │   │   └── neural_network_module.py  network: training, save / load (JSON)
 │   ├── encoding/                 chess-specific input / output encoding
@@ -60,7 +61,7 @@ first prediction is printed, so a broken board never leaves a truncated list.
 | 4. Encode the labels | `BASIC.one_hot(s.label for s in samples)` | `Y`, shape `(N, 3)` | done |
 | 5. Hold out validation | `validation_split` of the boards, drawn once from `seed`, inside `network.train` | training and validation indices | done |
 | 6. Run the network | `network.forward(X[batch])`, inside `network.train`, on shuffled batches of `batch_size` boards | scores, shape `(batch_size, 3)` | done |
-| 7. Compare with `Y` | loss on scores and `Y[batch]` | gradient of the loss | mean squared error (`_mean_squared_error`); softmax + cross-entropy to do |
+| 7. Compare with `Y` | the network's `loss` (`losses.py`) on scores and `Y[batch]` | gradient of the loss | done: softmax cross-entropy by default, or mean squared error |
 | 8. Learn | `network.backward(gradient)`, `network.update(learning_rate)`, after every batch | new weights and biases | done |
 | 9. Validate and maybe stop | after every epoch: validation loss and accuracy; stop after `patience` epochs without improvement, then restore the best epoch's weights | `TrainingHistory`, with `best` the kept epoch | done |
 | 10. Save | written to `<path>.tmp`, then `os.replace` | `.nn` file (JSON) in `SAVEFILE` or `LOADFILE` | done |
@@ -113,9 +114,17 @@ meaning: the analyzer translates them. `--train` uses `BASIC`, the set the
 subject requires, and refuses a network without exactly 3 outputs; `--predict`
 picks `BASIC` or `FULL` from the number of outputs (3 or 5).
 
+**Softmax lives in the loss, not in the network.** The last layer is linear
+and outputs raw scores; the `cross_entropy` loss applies softmax to them
+itself. Softmax and cross-entropy together have the simple gradient
+`(softmax(scores) - Y) / N`, and computing `log_softmax` after subtracting each
+row's largest score keeps `exp` from overflowing. A softmax *activation* would
+need its full Jacobian in the backward pass, unlike every other activation.
+`--predict` needs no softmax at all: it keeps the order of the scores, so the
+largest raw score is already the most probable class.
+
 ## Planned modules
 
-- `nn_module/losses.py` — MSE, softmax + cross entropy.
 - One loading rule for both modes: `--predict` checks the network itself and
   accepts 3 or 5 outputs, `--train` uses `analyser.network.load_network` and
   accepts 3 only.

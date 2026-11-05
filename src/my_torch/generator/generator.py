@@ -4,7 +4,7 @@ import json
 import os
 import sys
 
-from my_torch.nn_module import activations
+from my_torch.nn_module import activations, losses
 from my_torch.nn_module.neural_network_module import Neural_network_module
 
 USAGE = """USAGE
@@ -101,6 +101,11 @@ class Generator:
                 raise GeneratorError(f"{where}: 'validation_split' must be a number")
             if not 0 <= split < 1:
                 raise GeneratorError(f"{where}: 'validation_split' must be in [0, 1)")
+        if "loss" in hyper:
+            try:
+                losses.get(hyper["loss"])
+            except ValueError as error:
+                raise GeneratorError(f"{where}: {error}") from error
 
     def check_conf(self, conf: dict, path: str) -> None:
         """Reject a configuration before any network is written to disk."""

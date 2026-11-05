@@ -16,59 +16,91 @@ network below was trained on or stopped with.
 | --- | --- | --- | --- |
 | Full batch, before mini-batches | `[769, 128, 64, 3]` | 500 on 20k boards | ~42% |
 | Mini-batches (64), no validation | `[769, 128, 64, 3]` | 20 | 74.2% |
-| Mini-batches + validation + early stopping | `[769, 128, 64, 3]` | 57 kept of 60 run | **79.2%** |
+| Mini-batches + validation + early stopping, MSE (part 2) | `[769, 128, 64, 3]` | 57 kept of 60 run | 79.2% |
+| Same, softmax cross-entropy | `[769, 128, 64, 3]` | 24 kept of 27 run | **79.2%** |
 
 Always answering `Nothing` would score 41%.
 
-## Learning curves
+## Learning curves: cross-entropy against mean squared error
 
-![Two panels over 60 epochs. Left, loss: the training loss keeps falling to
-0.076 while the validation loss flattens around 0.104; a dashed line marks the
-kept epoch 57. Right, validation accuracy rising from 55% to about 79%, the
-same dashed line at epoch 57](images/learning_curves.png)
+![Validation accuracy per epoch for both losses, from the same initial
+weights. Cross-entropy climbs much faster and stops at epoch 27, keeping epoch
+24 at 79.2% on the test set; mean squared error climbs slowly and stops at
+epoch 68, keeping epoch 65 at 79.1%](images/loss_comparison.png)
 
-**Protocol.** `uv run python benchmarks/learning_curves.py` (after
-`uv run python -m my_torch.tools.shuffle_dataset`). Network `[769, 128, 64, 3]`
-(ReLU, ReLU, linear), mean squared error, batch size 64, learning rate 0.05,
-epoch limit 100, `validation_split` 0.2, `patience` 3, seed 42.
-`dataset/mixed/train.txt` gives 572,444 boards: 457,955 to train on and
-114,489 held out by `train()` to decide when to stop. `dataset/mixed/validation.txt`
-(143,111 boards) is the test set, used once at the end. 350 s on the machine
-described in the threads section, 4 OpenBLAS threads.
+**Protocol.** `uv run python benchmarks/learning_curves.py --compare` (after
+`uv run python -m my_torch.tools.shuffle_dataset`). Both losses train **a copy
+of the same initial network**: `[769, 128, 64, 3]` (ReLU, ReLU, linear), batch
+size 64, learning rate 0.05, epoch limit 100, `validation_split` 0.2,
+`patience` 3, seed 42. `dataset/mixed/train.txt` gives 572,444 boards: 457,955
+to train on and 114,489 held out by `train()` to decide when to stop.
+`dataset/mixed/validation.txt` (143,111 boards) is the test set, used once at
+the end. 4 OpenBLAS threads, on the machine described in the threads section.
 
-| Epoch | Training loss | Validation loss | Validation accuracy |
-| --- | --- | --- | --- |
-| 1 | 0.1992 | 0.1857 | 54.7% |
-| 10 | 0.1393 | 0.1435 | 68.0% |
-| 20 | 0.1172 | 0.1277 | 72.5% |
-| 30 | 0.1012 | 0.1168 | 75.6% |
-| 40 | 0.0900 | 0.1111 | 77.2% |
-| 50 | 0.0818 | 0.1065 | 78.5% |
-| 56 | 0.0779 | 0.1038 | 79.3% |
-| **57 (kept)** | **0.0773** | **0.1034** | **79.3%** |
-| 58 | 0.0767 | 0.1054 | 78.9% |
-| 59 | 0.0762 | 0.1038 | 79.1% |
-| 60 | 0.0756 | 0.1038 | 79.5% |
+| Loss | Stopped at | Kept epoch | Validation acc. | Test acc. | Time |
+| --- | --- | --- | --- | --- | --- |
+| `cross_entropy` | 27 of 100 | 24 | 79.2% | **79.2%** | **162 s** |
+| `mse` | 68 of 100 | 65 | 79.1% | 79.1% | 419 s |
+
+The two losses are on different scales (cross-entropy starts near ln 3 ≈ 1.1,
+the mean squared error near 0.3), so only the accuracies compare.
 
 **Results.**
 
-- **79.2% on the test set**, against 79.3% on the held-out validation boards:
-  the validation estimate is trustworthy, nothing leaked between the sets.
-- **The two losses part ways.** Until epoch ~5 they fall together; after that
-  the training loss keeps falling (0.077 at epoch 57) while the validation loss
-  flattens around 0.104. The widening gap is the network starting to learn the
-  training boards by heart rather than rules that carry over.
-- **Early stopping caught it**: epochs 58 to 60 did not beat epoch 57's
-  validation loss, so training stopped at 60 of the 100 allowed and kept
-  epoch 57's weights.
-- **Stopping watches the loss, not the accuracy**: epoch 60 reached 79.5%
-  validation accuracy, 0.2 points above the kept epoch, but with a higher
-  loss. Accuracy moves by a few tenths from epoch to epoch; the loss is the
-  smoother signal.
-- **The plateau is shallow**: the validation loss was still creeping down by
-  ~0.001 per few epochs before it stopped. A larger `patience` would train a
-  little longer for a small gain; part 3 (softmax + cross-entropy) and the
-  network size are more likely to move the curve itself.
+- **Same accuracy, 2.7 times sooner.** Cross-entropy reaches 79.2% in 24
+  epochs, the mean squared error 79.1% in 65: the gap between them is noise,
+  the speed is not. Cross-entropy is the loss built for picking one class out
+  of several: its gradient `softmax(scores) - Y` stays large while an answer is
+  wrong, where the squared error's gradient shrinks as scores get close.
+- **Cross-entropy also overfits sooner.** Its validation loss stops falling
+  around epoch 21 while its training loss keeps dropping (0.35 against 0.50 at
+  the kept epoch), so early stopping ends it at 27.
+- **Stopping watches the loss, and accuracy was still rising**: epoch 27 had
+  79.6% validation accuracy, 0.4 points above the kept epoch 24. Cross-entropy
+  also penalises over-confident answers, so its loss can flatten while the
+  accuracy still creeps up; a larger `patience` could gain a few tenths.
+- **Both plateau near 79%**: the limit now comes from the network more than the
+  loss. Next levers: a bigger network, regularisation against the early
+  overfitting, the learning rate.
+
+![Cross-entropy run. Left: training loss falling to 0.33 while the validation
+loss flattens around 0.50 from epoch 21; dashed line at the kept epoch 24.
+Right: validation accuracy rising from 59% to about 79.5%](images/learning_curves_cross_entropy.png)
+
+| Epoch | Training loss | Validation loss | Validation accuracy |
+| --- | --- | --- | --- |
+| 1 | 0.9298 | 0.8525 | 59.0% |
+| 5 | 0.6608 | 0.6624 | 69.3% |
+| 10 | 0.5210 | 0.5693 | 74.5% |
+| 15 | 0.4391 | 0.5168 | 77.5% |
+| 20 | 0.3844 | 0.5106 | 78.5% |
+| 21 | 0.3757 | 0.5029 | 78.8% |
+| 22 | 0.3672 | 0.5058 | 78.8% |
+| 23 | 0.3596 | 0.5059 | 79.0% |
+| **24 (kept)** | **0.3523** | **0.5016** | **79.2%** |
+| 25 | 0.3451 | 0.5069 | 79.1% |
+| 26 | 0.3386 | 0.5077 | 79.3% |
+| 27 | 0.3322 | 0.5039 | 79.6% |
+
+![Mean squared error run. Left: training loss falling to 0.11 while the
+validation loss flattens around 0.156; dashed line at the kept epoch 65.
+Right: validation accuracy rising from 55% to about 79%](images/learning_curves_mse.png)
+
+| Epoch | Training loss | Validation loss | Validation accuracy |
+| --- | --- | --- | --- |
+| 1 | 0.2990 | 0.2784 | 54.9% |
+| 10 | 0.2117 | 0.2174 | 67.5% |
+| 20 | 0.1773 | 0.1913 | 72.4% |
+| 30 | 0.1535 | 0.1772 | 75.3% |
+| 40 | 0.1372 | 0.1687 | 76.8% |
+| 50 | 0.1255 | 0.1631 | 77.9% |
+| 60 | 0.1168 | 0.1590 | 78.8% |
+| 63 | 0.1145 | 0.1583 | 78.8% |
+| 64 | 0.1137 | 0.1583 | 78.8% |
+| **65 (kept)** | **0.1130** | **0.1562** | **79.1%** |
+| 66 | 0.1123 | 0.1586 | 78.8% |
+| 67 | 0.1117 | 0.1566 | 79.2% |
+| 68 | 0.1109 | 0.1573 | 79.0% |
 
 ## Training speed: batch size and OpenBLAS threads
 
