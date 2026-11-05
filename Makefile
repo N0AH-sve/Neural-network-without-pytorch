@@ -24,8 +24,6 @@ all: $(BINARIES)
 install:
 	$(UV) sync
 
-# The binaries run the sources with the system $(PYTHON) and its numpy, so they
-# work without uv (the grading machine has none); uv is only for development.
 $(ANALYZER):
 	@printf '#!/bin/sh\nexport OPENBLAS_NUM_THREADS="$${OPENBLAS_NUM_THREADS:-$(BLAS_THREADS)}"\nexport PYTHONPATH="$$(dirname "$$0")/src$${PYTHONPATH:+:$$PYTHONPATH}"\nexec $(PYTHON) -m my_torch.analyser.analyzer "$$@"\n' > $@
 	@chmod +x $@
