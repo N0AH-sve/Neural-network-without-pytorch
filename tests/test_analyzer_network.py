@@ -3,7 +3,7 @@ import pytest
 
 from my_torch.analyser.network import load_network
 from my_torch.encoding.features import INPUT_SIZE
-from my_torch.encoding.labels import BASIC
+from my_torch.encoding.labels import BASIC, FULL
 from my_torch.nn_module.neural_network_module import Neural_network_module
 
 
@@ -29,6 +29,11 @@ def test_the_loaded_network_is_the_saved_one(tmp_path):
     original.save(str(path))
     x = np.zeros((2, INPUT_SIZE))
     assert np.allclose(load_network(str(path)).forward(x), original.forward(x))
+
+
+def test_a_coloured_network_is_loaded(tmp_path):
+    network = load_network(saved(tmp_path, [INPUT_SIZE, 8, len(FULL)]))
+    assert network.layers[-1].output == len(FULL)
 
 
 @pytest.mark.parametrize("inputs", [768, 770, 4])
