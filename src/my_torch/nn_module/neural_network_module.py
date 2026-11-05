@@ -4,6 +4,7 @@ from dataclasses import dataclass
 
 import numpy as np
 
+from my_torch.nn_module import losses
 from my_torch.nn_module.layer import Layer
 
 EPOCH = 20
@@ -11,12 +12,9 @@ LEARNING_RATE = 0.005
 BATCH_SIZE = 64
 VALIDATION_SPLIT = 0.2
 PATIENCE = 3
+LOSS = "cross_entropy"
 SEED = 42 # everyone have 42 <
 FORMAT_VERSION = 1
-
-def _mean_squared_error(output, target) -> float:
-    return float(np.mean((output - target) ** 2))
-
 
 @dataclass(frozen=True)
 class EpochMetrics:
@@ -72,13 +70,15 @@ class Neural_network_module:
     def __init__(self, int_layers : list[int] | None = None, epochs : int = EPOCH,
                  learning_rate : float = LEARNING_RATE, seed : int = SEED,
                  layers : list[Layer] | None = None, batch_size : int = BATCH_SIZE,
-                 validation_split : float = VALIDATION_SPLIT, patience : int = PATIENCE):
+                 validation_split : float = VALIDATION_SPLIT, patience : int = PATIENCE,
+                 loss : str = LOSS):
         self.epochs = epochs
         self.learning_rate = learning_rate
         self.seed = seed
         self.batch_size = batch_size
         self.validation_split = validation_split
         self.patience = patience
+        self.loss = losses.get(loss).name
         self.layers = self._init_layers(int_layers) if layers is None else layers
         self.version = 1
 
@@ -125,6 +125,7 @@ class Neural_network_module:
                 "batch_size": self.batch_size,
                 "validation_split": self.validation_split,
                 "patience": self.patience,
+                "loss": self.loss,
             },
             "data": {
                 "layers": [
@@ -155,6 +156,7 @@ class Neural_network_module:
             "batch_size": hyper.get("batch_size", BATCH_SIZE),
             "validation_split": hyper.get("validation_split", VALIDATION_SPLIT),
             "patience": hyper.get("patience", PATIENCE),
+            "loss": hyper.get("loss", LOSS),
         }
 
     @classmethod
@@ -251,10 +253,11 @@ class Neural_network_module:
 
     def _step(self, x, y) -> float:
         """Forward, backward and update on one batch; returns its loss."""
+        loss = losses.get(self.loss)
         output = self.forward(x)
-        self.backward((output - y) / len(x))
+        self.backward(loss.gradient(output, y))
         self.update(self.learning_rate)
-        return _mean_squared_error(output, y)
+        return loss.value(output, y)
 
     def _validate(self, x, y) -> dict:
         """The validation fields of EpochMetrics, measured on samples never
@@ -265,6 +268,6 @@ class Neural_network_module:
             return {}
         output = self.forward_in_batches(x)
         return {
-            "validation_loss": _mean_squared_error(output, y),
+            "validation_loss": losses.get(self.loss).value(output, y),
             "validation_accuracy": float(np.mean(output.argmax(axis=1) == y.argmax(axis=1))),
         }

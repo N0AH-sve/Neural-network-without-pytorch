@@ -20,13 +20,13 @@ Options may come before or after the two files; the first file is always
 
 ```sh
 $> ./my_torch_analyzer --train --save trained.nn my_torch_network.nn boards.txt
-epoch 1/30: loss 0.2275, validation loss 0.2174, validation accuracy 42.0%
+epoch 1/30: loss 1.0726, validation loss 1.0625, validation accuracy 42.0%
 ...
-epoch 22/30: loss 0.1646, validation loss 0.1944, validation accuracy 52.6%
-epoch 23/30: loss 0.1621, validation loss 0.1945, validation accuracy 52.5%
-epoch 24/30: loss 0.1596, validation loss 0.1951, validation accuracy 52.8%
-epoch 25/30: loss 0.1574, validation loss 0.1951, validation accuracy 52.9%
-Number of boards : 20000, kept epoch 22 of 25, 52.6% validation accuracy
+epoch 13/30: loss 0.8054, validation loss 0.9188, validation accuracy 56.0%
+epoch 14/30: loss 0.7846, validation loss 0.9215, validation accuracy 55.7%
+epoch 15/30: loss 0.7636, validation loss 0.9243, validation accuracy 56.1%
+epoch 16/30: loss 0.7430, validation loss 0.9289, validation accuracy 56.2%
+Number of boards : 20000, kept epoch 13 of 16, 56.0% validation accuracy
 ```
 
 1. `LOADFILE` is loaded and must take 769 inputs (one encoded board) and give
