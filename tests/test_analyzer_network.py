@@ -3,7 +3,7 @@ import pytest
 
 from my_torch.analyser.network import load_network
 from my_torch.encoding.features import INPUT_SIZE
-from my_torch.encoding.labels import BASIC
+from my_torch.encoding.labels import BASIC, FULL
 from my_torch.nn_module.neural_network_module import Neural_network_module
 
 
@@ -31,15 +31,20 @@ def test_the_loaded_network_is_the_saved_one(tmp_path):
     assert np.allclose(load_network(str(path)).forward(x), original.forward(x))
 
 
+def test_a_coloured_network_is_loaded(tmp_path):
+    network = load_network(saved(tmp_path, [INPUT_SIZE, 8, len(FULL)]))
+    assert network.layers[-1].output == len(FULL)
+
+
 @pytest.mark.parametrize("inputs", [768, 770, 4])
 def test_wrong_input_size(tmp_path, inputs):
     with pytest.raises(ValueError, match=f"takes {inputs} inputs, expected 769"):
         load_network(saved(tmp_path, [inputs, 8, len(BASIC)]))
 
 
-@pytest.mark.parametrize("outputs", [1, 2, 5])
+@pytest.mark.parametrize("outputs", [1, 2, 4, 6])
 def test_wrong_output_size(tmp_path, outputs):
-    with pytest.raises(ValueError, match=f"has {outputs} outputs, expected 3"):
+    with pytest.raises(ValueError, match=f"{outputs} output neurons, expected one of: 3, 5"):
         load_network(saved(tmp_path, [INPUT_SIZE, 8, outputs]))
 
 

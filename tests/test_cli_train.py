@@ -70,3 +70,11 @@ def test_network_that_does_not_fit_exits_84(tmp_path, files, capsys):
     Neural_network_module([4, 3, 2]).save(str(network))
     assert analyzer.main(["--train", str(network), str(boards)]) == 84
     assert "takes 4 inputs, expected 769" in capsys.readouterr().err
+
+
+def test_network_with_the_wrong_number_of_outputs_exits_84(tmp_path, files, capsys):
+    _, boards = files
+    network = tmp_path / "four.nn"
+    Neural_network_module([INPUT_SIZE, 8, 4]).save(str(network))
+    assert analyzer.main(["--train", str(network), str(boards)]) == 84
+    assert "4 output neurons, expected one of: 3, 5" in capsys.readouterr().err

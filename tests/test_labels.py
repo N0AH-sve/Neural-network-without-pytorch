@@ -1,7 +1,7 @@
 import numpy as np
 import pytest
 
-from my_torch.encoding.labels import BASIC, FULL, LabelSet
+from my_torch.encoding.labels import BASIC, FULL, LABEL_SETS, LabelSet, for_outputs
 
 CLASSES = ["Nothing", "Check White", "Checkmate Black"]
 
@@ -102,3 +102,21 @@ def test_one_hot_of_nothing_is_an_empty_matrix():
 def test_one_hot_rejects_an_unknown_label():
     with pytest.raises(ValueError, match="unknown label 'Stalemate'"):
         BASIC.one_hot(["Check", "Stalemate"])
+
+
+def test_three_outputs_give_the_basic_set():
+    assert for_outputs(3) is BASIC
+
+
+def test_five_outputs_give_the_full_set():
+    assert for_outputs(5) is FULL
+
+
+@pytest.mark.parametrize("outputs", [0, 1, 2, 4, 6])
+def test_other_widths_list_the_valid_ones(outputs):
+    with pytest.raises(ValueError, match=f"^{outputs} output neurons, expected one of: 3, 5$"):
+        for_outputs(outputs)
+
+
+def test_every_set_is_found_by_its_own_size():
+    assert all(for_outputs(len(labels)) is labels for labels in LABEL_SETS.values())

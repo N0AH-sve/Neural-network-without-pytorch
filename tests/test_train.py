@@ -7,7 +7,7 @@ from my_torch.analyser.arguments import Arguments
 from my_torch.analyser.train import train
 from my_torch.encoding.chessfile import read_samples
 from my_torch.encoding.features import INPUT_SIZE, encode_all
-from my_torch.encoding.labels import BASIC
+from my_torch.encoding.labels import BASIC, FULL, for_outputs
 from my_torch.encoding.position import FenError
 from my_torch.nn_module import losses
 from my_torch.nn_module.layer import Layer
@@ -35,11 +35,12 @@ def chessfile(tmp_path, lines):
 
 
 def loss(network_path, lines):
-    """Loss of a saved network on labelled lines, with the loss it trains with."""
+    """Loss of a saved network on labelled lines, with the loss and the label
+    set it trains with."""
     samples = read_samples(lines)
-    x = encode_all(s.position for s in samples)
-    y = BASIC.one_hot(s.label for s in samples)
     network = Neural_network_module.load(str(network_path))
+    x = encode_all(s.position for s in samples)
+    y = for_outputs(network.layers[-1].output).one_hot(s.label for s in samples)
     return losses.get(network.loss).value(network.forward(x), y)
 
 
@@ -89,6 +90,39 @@ def test_bad_chess_file_leaves_the_network_untouched(tmp_path, loadfile, lines, 
     with pytest.raises(error, match=message):
         train(Arguments("train", str(loadfile), str(chessfile(tmp_path, lines))))
     assert loadfile.read_bytes() == original
+
+
+def coloured(tmp_path, **hyperparameters):
+    path = tmp_path / "coloured.nn"
+    Neural_network_module([INPUT_SIZE, 16, len(FULL)], learning_rate=0.05,
+                          validation_split=0.0, **hyperparameters).save(str(path))
+    return path
+
+
+def test_a_coloured_network_lowers_its_loss(tmp_path):
+    path = coloured(tmp_path, epochs=50)
+    before = loss(path, TRAINING_LINES)
+    train(Arguments("train", str(path), str(chessfile(tmp_path, TRAINING_LINES))))
+    assert loss(path, TRAINING_LINES) < before
+
+
+def test_a_coloured_network_learns_the_colours(tmp_path):
+    """Long enough on 3 boards to learn them by heart, colours included."""
+    path = coloured(tmp_path, epochs=300)
+    train(Arguments("train", str(path), str(chessfile(tmp_path, TRAINING_LINES))))
+    samples = read_samples(TRAINING_LINES)
+    scores = Neural_network_module.load(str(path)).forward(
+        encode_all(s.position for s in samples))
+    assert [FULL.label(i) for i in scores.argmax(axis=1)] == [s.label for s in samples]
+
+
+def test_a_coloured_network_needs_coloured_labels(tmp_path):
+    path = coloured(tmp_path)
+    original = path.read_bytes()
+    with pytest.raises(ValueError, match="unknown label 'Check'"):
+        train(Arguments("train", str(path),
+                        str(chessfile(tmp_path, ["4k3/8/8/8/8/8/8/4K3 w - - Check"]))))
+    assert path.read_bytes() == original
 
 
 def test_network_that_does_not_fit_is_rejected(tmp_path):

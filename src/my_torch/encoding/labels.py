@@ -56,3 +56,14 @@ def _has_colour(label: str) -> bool:
 
 BASIC = LabelSet(["Nothing", "Check", "Checkmate"])
 FULL = LabelSet(["Nothing", "Check White", "Check Black", "Checkmate White", "Checkmate Black"])
+LABEL_SETS = {len(BASIC): BASIC, len(FULL): FULL}
+
+
+def for_outputs(outputs: int) -> LabelSet:
+    """Label set of a network with this many output neurons: the .nn file
+    stores no class names, so its width is the only hint."""
+    try:
+        return LABEL_SETS[outputs]
+    except KeyError:
+        valid = ", ".join(str(size) for size in sorted(LABEL_SETS))
+        raise ValueError(f"{outputs} output neurons, expected one of: {valid}") from None
