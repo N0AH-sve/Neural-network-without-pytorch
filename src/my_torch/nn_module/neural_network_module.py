@@ -13,6 +13,7 @@ BATCH_SIZE = 64
 VALIDATION_SPLIT = 0.2
 PATIENCE = 3
 LOSS = "cross_entropy"
+DROPOUT = 0.0
 SEED = 42 # everyone have 42 <
 FORMAT_VERSION = 1
 
@@ -71,7 +72,7 @@ class Neural_network_module:
                  learning_rate : float = LEARNING_RATE, seed : int = SEED,
                  layers : list[Layer] | None = None, batch_size : int = BATCH_SIZE,
                  validation_split : float = VALIDATION_SPLIT, patience : int = PATIENCE,
-                 loss : str = LOSS):
+                 loss : str = LOSS, dropout : float = DROPOUT):
         self.epochs = epochs
         self.learning_rate = learning_rate
         self.seed = seed
@@ -79,8 +80,24 @@ class Neural_network_module:
         self.validation_split = validation_split
         self.patience = patience
         self.loss = losses.get(loss).name
+        self.dropout = dropout
         self.layers = self._init_layers(int_layers) if layers is None else layers
+        self._apply_dropout()
         self.version = 1
+
+    def set_dropout(self, rate : float) -> None:
+        """Change the rate of an already built network, e.g. to compare rates
+        from one same set of initial weights."""
+        self.dropout = rate
+        self._apply_dropout()
+
+    def _apply_dropout(self) -> None:
+        """Dropout on the output of every layer but the last: the last one
+        outputs the scores the prediction reads, and dropping those would only
+        add noise to the answer, never spread what the network relies on."""
+        last = len(self.layers) - 1
+        for i, layer in enumerate(self.layers):
+            layer.dropout = self.dropout if i < last else 0.0
 
 
     def _init_layers(self, int_layers : list[int]) -> list[Layer]:
@@ -92,9 +109,12 @@ class Neural_network_module:
             layers.append(layer)
         return layers
 
-    def forward(self, x):
+    def forward(self, x, rng : np.random.Generator | None = None):
+        """Scores of every sample of x. An rng turns this into a training
+        pass, where each layer drops units; without one, every unit takes
+        part, which is what prediction and validation need."""
         for layer in self.layers:
-            x = layer.forward(x)
+            x = layer.forward(x, rng)
         return x
 
     def forward_in_batches(self, x, batch_size : int = 4096):
@@ -126,6 +146,7 @@ class Neural_network_module:
                 "validation_split": self.validation_split,
                 "patience": self.patience,
                 "loss": self.loss,
+                "dropout": self.dropout,
             },
             "data": {
                 "layers": [
@@ -157,6 +178,7 @@ class Neural_network_module:
             "validation_split": hyper.get("validation_split", VALIDATION_SPLIT),
             "patience": hyper.get("patience", PATIENCE),
             "loss": hyper.get("loss", LOSS),
+            "dropout": hyper.get("dropout", DROPOUT),
         }
 
     @classmethod
@@ -225,7 +247,7 @@ class Neural_network_module:
         stopping = _EarlyStopping(self.patience)
         history = TrainingHistory()
         for epoch in range(1, self.epochs + 1):
-            loss = self._train_epoch(x, y, rng.permutation(training))
+            loss = self._train_epoch(x, y, rng.permutation(training), rng)
             metrics = EpochMetrics(epoch, loss, **self._validate(x_validation, y_validation))
             history.append(metrics)
             if on_epoch is not None:
@@ -243,18 +265,23 @@ class Neural_network_module:
         size = max(0, min(round(n * self.validation_split), n - 1))
         return order[size:], order[:size]
 
-    def _train_epoch(self, x, y, order : np.ndarray) -> float:
+    def _train_epoch(self, x, y, order : np.ndarray,
+                     rng : np.random.Generator) -> float:
         """One update per batch of batch_size samples, taken in the given
         order; returns the epoch's loss, each batch weighing by its size."""
         batches = [order[start:start + self.batch_size]
                    for start in range(0, len(order), self.batch_size)]
-        losses = [self._step(x[batch], y[batch]) for batch in batches]
+        losses = [self._step(x[batch], y[batch], rng) for batch in batches]
         return float(np.average(losses, weights=[len(b) for b in batches])) if batches else 0.0
 
-    def _step(self, x, y) -> float:
-        """Forward, backward and update on one batch; returns its loss."""
+    def _step(self, x, y, rng : np.random.Generator) -> float:
+        """Forward, backward and update on one batch; returns its loss.
+
+        The forward pass is the training one, so the loss reported is the loss
+        of a dropped sub-network, which runs higher than the loss of the whole
+        network on the same batch."""
         loss = losses.get(self.loss)
-        output = self.forward(x)
+        output = self.forward(x, rng)
         self.backward(loss.gradient(output, y))
         self.update(self.learning_rate)
         return loss.value(output, y)
