@@ -31,9 +31,9 @@ def record_batches(net):
     batches = []
     forward = net.forward
 
-    def recording_forward(x):
+    def recording_forward(x, rng=None):
         batches.append(x[:, 0].astype(int).tolist())
-        return forward(x)
+        return forward(x, rng)
 
     net.forward = recording_forward
     return batches

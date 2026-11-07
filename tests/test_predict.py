@@ -5,7 +5,7 @@ import numpy as np
 import pytest
 
 from my_torch.analyser import analyzer
-from my_torch.analyser.predict import LABEL_SETS, Predict
+from my_torch.analyser.predict import Predict
 from my_torch.encoding.chessfile import read_samples
 from my_torch.encoding.features import INPUT_SIZE, encode
 from my_torch.encoding.labels import BASIC, FULL
@@ -33,36 +33,6 @@ def net_shaped(tmp_path, sizes: list[int], name: str = "net.nn") -> str:
     path = tmp_path / name
     Neural_network_module(int_layers=sizes).save(str(path))
     return str(path)
-
-
-# --- label_set_of ----------------------------------------------------------
-
-def test_three_output_neurons_select_the_plain_states(tmp_path):
-    net = Neural_network_module.load(net_shaped(tmp_path, [INPUT_SIZE, 8, 3]))
-    assert Predict.label_set_of(net) is BASIC
-
-
-def test_five_output_neurons_select_the_coloured_states(tmp_path):
-    net = Neural_network_module.load(net_shaped(tmp_path, [INPUT_SIZE, 8, 5]))
-    assert Predict.label_set_of(net) is FULL
-
-
-@pytest.mark.parametrize("width", [1, 2, 4, 6, 12])
-def test_any_other_width_is_rejected(tmp_path, width):
-    net = Neural_network_module.load(net_shaped(tmp_path, [INPUT_SIZE, 8, width]))
-    with pytest.raises(ValueError, match=f"{width} output neurons"):
-        Predict.label_set_of(net)
-
-
-def test_the_rejection_lists_the_accepted_widths(tmp_path):
-    net = Neural_network_module.load(net_shaped(tmp_path, [INPUT_SIZE, 8, 4]))
-    with pytest.raises(ValueError, match=re.escape("expected one of: 3, 5")):
-        Predict.label_set_of(net)
-
-
-def test_the_label_sets_are_keyed_by_their_own_length():
-    """The keys must not drift from the sets they point at."""
-    assert all(len(labels) == width for width, labels in LABEL_SETS.items())
 
 
 # --- classify --------------------------------------------------------------

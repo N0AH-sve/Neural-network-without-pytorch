@@ -28,8 +28,8 @@ def loadfile(tmp_path):
     return path
 
 
-def chessfile(tmp_path, lines):
-    path = tmp_path / "boards.txt"
+def chessfile(tmp_path, lines, name="boards.txt"):
+    path = tmp_path / name
     path.write_text("".join(f"{line}\n" for line in lines))
     return path
 
@@ -116,12 +116,36 @@ def test_a_coloured_network_learns_the_colours(tmp_path):
     assert [FULL.label(i) for i in scores.argmax(axis=1)] == [s.label for s in samples]
 
 
-def test_a_coloured_network_needs_coloured_labels(tmp_path):
+UNCOLOURED_LINES = [line.removesuffix(" Black").removesuffix(" White")
+                    for line in TRAINING_LINES]
+
+
+def test_a_coloured_network_accepts_uncoloured_labels(tmp_path):
+    """One chess file fits both widths: the side to move names the colour."""
+    path = coloured(tmp_path, epochs=1)
+    assert train(Arguments("train", str(path),
+                           str(chessfile(tmp_path, UNCOLOURED_LINES)))) == 0
+
+
+def test_the_derived_colours_are_the_ones_the_labels_state(tmp_path):
+    """Training on the uncoloured lines must land on the same weights as
+    training on the same boards with their colours written out."""
+    derived = coloured(tmp_path)
+    stated = tmp_path / "stated.nn"
+    stated.write_bytes(derived.read_bytes())
+    train(Arguments("train", str(derived),
+                    str(chessfile(tmp_path, UNCOLOURED_LINES, "without.txt"))))
+    train(Arguments("train", str(stated),
+                    str(chessfile(tmp_path, TRAINING_LINES, "with.txt"))))
+    assert derived.read_bytes() == stated.read_bytes()
+
+
+def test_a_coloured_network_still_needs_a_known_label(tmp_path):
     path = coloured(tmp_path)
     original = path.read_bytes()
-    with pytest.raises(ValueError, match="unknown label 'Check'"):
+    with pytest.raises(ValueError, match="unknown label 'Stalemate'"):
         train(Arguments("train", str(path),
-                        str(chessfile(tmp_path, ["4k3/8/8/8/8/8/8/4K3 w - - Check"]))))
+                        str(chessfile(tmp_path, ["4k3/8/8/8/8/8/8/4K3 w - - Stalemate"]))))
     assert path.read_bytes() == original
 
 

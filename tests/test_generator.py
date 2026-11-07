@@ -210,6 +210,24 @@ def test_check_conf_accepts_a_validation_split_in_range(split):
     check(VALID_CONF | {"hyperparameters": {"validation_split": split}})
 
 
+@pytest.mark.parametrize("rate", ["0.5", None, True, [0.5]])
+def test_check_conf_rejects_a_dropout_that_is_not_a_number(rate):
+    with pytest.raises(GeneratorError, match="'dropout' must be a number"):
+        check(VALID_CONF | {"hyperparameters": {"dropout": rate}})
+
+
+@pytest.mark.parametrize("rate", [1, 1.5, -0.1])
+def test_check_conf_rejects_a_dropout_out_of_range(rate):
+    """1 would drop every unit of a layer, leaving nothing to learn from."""
+    with pytest.raises(GeneratorError, match=re.escape("'dropout' must be in [0, 1)")):
+        check(VALID_CONF | {"hyperparameters": {"dropout": rate}})
+
+
+@pytest.mark.parametrize("rate", [0, 0.0, 0.5, 0.99])
+def test_check_conf_accepts_a_dropout_in_range(rate):
+    check(VALID_CONF | {"hyperparameters": {"dropout": rate}})
+
+
 @pytest.mark.parametrize("loss", ["hinge", "", 5, None, True])
 def test_check_conf_rejects_an_unknown_loss(loss):
     with pytest.raises(GeneratorError, match="unknown loss") as error:
@@ -408,6 +426,8 @@ def test_a_valid_fixture_is_accepted(name):
     ("patience_not_positive.conf", "'patience' must be positive"),
     ("validation_split_not_a_number.conf", "'validation_split' must be a number"),
     ("validation_split_out_of_range.conf", "'validation_split' must be in [0, 1)"),
+    ("dropout_not_a_number.conf", "'dropout' must be a number"),
+    ("dropout_out_of_range.conf", "'dropout' must be in [0, 1)"),
     ("unknown_loss.conf", "unknown loss 'hinge'"),
     ("seed_not_an_integer.conf", "'seed' must be an integer"),
     ("learning_rate_not_a_number.conf", "'learning_rate' must be a number"),
@@ -473,6 +493,8 @@ def test_main_generates_a_network_from_a_valid_fixture(name, tmp_path, monkeypat
     "patience_not_positive.conf",
     "validation_split_not_a_number.conf",
     "validation_split_out_of_range.conf",
+    "dropout_not_a_number.conf",
+    "dropout_out_of_range.conf",
     "unknown_loss.conf",
     "seed_not_an_integer.conf",
     "learning_rate_not_a_number.conf",
