@@ -95,12 +95,14 @@ class Generator:
                 raise GeneratorError(f"{where}: 'learning_rate' must be a number")
             if rate <= 0:
                 raise GeneratorError(f"{where}: 'learning_rate' must be positive")
-        if "validation_split" in hyper:
-            split = hyper["validation_split"]
-            if isinstance(split, bool) or not isinstance(split, (int, float)):
-                raise GeneratorError(f"{where}: 'validation_split' must be a number")
-            if not 0 <= split < 1:
-                raise GeneratorError(f"{where}: 'validation_split' must be in [0, 1)")
+        for key in ("validation_split", "dropout"):
+            if key not in hyper:
+                continue
+            share = hyper[key]
+            if isinstance(share, bool) or not isinstance(share, (int, float)):
+                raise GeneratorError(f"{where}: '{key}' must be a number")
+            if not 0 <= share < 1:
+                raise GeneratorError(f"{where}: '{key}' must be in [0, 1)")
         if "loss" in hyper:
             try:
                 losses.get(hyper["loss"])

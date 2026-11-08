@@ -53,10 +53,18 @@ def test_the_default_output_is_skipped_even_with_another_output(tmp_path):
     assert collect_files(["dataset"], Path("elsewhere")) == [Path("dataset/check/a.txt")]
 
 
-def test_entries_keep_the_line_and_its_basic_class(tmp_path):
+def test_entries_keep_the_line_and_its_coloured_class(tmp_path):
     entries, duplicates = read_entries([write(tmp_path / "a.txt", [CHECK, MATE, NOTHING])])
-    assert entries == [(CHECK, "Check"), (MATE, "Checkmate"), (NOTHING, "Nothing")]
+    assert entries == [(CHECK, "Check White"), (MATE, "Checkmate Black"), (NOTHING, "Nothing")]
     assert duplicates == 0
+
+
+def test_a_label_without_a_colour_is_counted_under_its_derived_one(tmp_path):
+    """The side to move names the colour, so an uncoloured file is still
+    counted per colour."""
+    lines = [CHECK.removesuffix(" White"), MATE.removesuffix(" Black")]
+    entries, _ = read_entries([write(tmp_path / "a.txt", lines)])
+    assert [label for _, label in entries] == ["Check White", "Checkmate Black"]
 
 
 def test_duplicates_are_dropped_across_files(tmp_path):
@@ -64,7 +72,7 @@ def test_duplicates_are_dropped_across_files(tmp_path):
     other_counters = CHECK.replace("- 1 3", "- 9 50")
     files = [write(tmp_path / "a.txt", [CHECK]), write(tmp_path / "b.txt", [other_counters])]
     entries, duplicates = read_entries(files)
-    assert entries == [(CHECK, "Check")]
+    assert entries == [(CHECK, "Check White")]
     assert duplicates == 1
 
 

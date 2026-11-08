@@ -8,7 +8,7 @@ from my_torch.analyser.arguments import Arguments
 from my_torch.analyser.network import load_network
 from my_torch.encoding.chessfile import read_samples
 from my_torch.encoding.features import encode_all
-from my_torch.encoding.labels import BASIC
+from my_torch.encoding.labels import for_outputs
 from my_torch.nn_module.neural_network_module import (
     EpochMetrics,
     Neural_network_module,
@@ -18,14 +18,21 @@ from my_torch.nn_module.neural_network_module import (
 
 def train(args: Arguments) -> int:
     """Train LOADFILE on the labelled boards of CHESSFILE, then save it in
-    SAVEFILE if given, otherwise back in LOADFILE."""
+    SAVEFILE if given, otherwise back in LOADFILE. A 3-output network learns
+    the states without colour, a 5-output one learns them with it; either
+    width trains on either kind of chess file, since the side to move tells
+    the colour of a label that does not carry one."""
     network = load_network(args.loadfile)
     with open(args.chessfile) as file:
         samples = read_samples(file, require_labels=True)
     if not samples:
         raise ValueError(f"{args.chessfile}: no board to train on")
     x = encode_all(sample.position for sample in samples)
-    y = BASIC.one_hot(sample.label for sample in samples)
+    labels = for_outputs(network.layers[-1].output)
+    y = labels.one_hot(
+        [sample.label for sample in samples],
+        [sample.position.side for sample in samples],
+    )
     history = network.train(x, y, on_epoch=lambda metrics: _print_epoch(metrics, network.epochs))
     summary = _summary(network, history, x, y)
     _save(network, args.savefile or args.loadfile)

@@ -29,9 +29,9 @@ def record_forward(net):
     calls = []
     forward = net.forward
 
-    def recording_forward(x):
+    def recording_forward(x, rng=None):
         calls.append(x[:, 0].astype(int).tolist())
-        return forward(x)
+        return forward(x, rng)
 
     net.forward = recording_forward
     return calls
@@ -138,7 +138,7 @@ def script(net, validation_losses):
     epochs = iter(range(1, len(validation_losses) + 1))
     losses = iter(validation_losses)
 
-    def train_epoch(x, y, order):
+    def train_epoch(x, y, order, rng):
         epoch = next(epochs)
         for layer in net.layers:
             layer.w = np.full_like(layer.w, epoch)

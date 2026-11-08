@@ -6,7 +6,8 @@
 Every line is parsed, so a broken file fails here rather than mid-training.
 A board (placement + side to move) is kept once, so the same position cannot
 end up in both files. The shuffle is seeded: the same command gives the same
-split.
+split. Boards are counted per coloured class, the colour of a label that does
+not carry one being read from the side to move.
 """
 
 import argparse
@@ -17,11 +18,13 @@ from collections.abc import Iterable
 from pathlib import Path
 
 from my_torch.encoding.chessfile import read_samples
-from my_torch.encoding.labels import BASIC
+from my_torch.encoding.labels import FULL
 
 DEFAULT_OUTPUT = Path("dataset/mixed")
 
-# (line, BASIC class) for each board.
+# (line, coloured class) for each board: a label given without a colour is
+# completed from the side to move, so the report shows the real balance
+# whether the files name the colours or not.
 Entry = tuple[str, str]
 
 
@@ -53,7 +56,8 @@ def read_entries(files: Iterable[Path]) -> tuple[list[Entry], int]:
             lines = [" ".join(line.split()) for line in file]
         try:
             samples = read_samples(lines, require_labels=True)
-            classes = [BASIC.label(BASIC.index(sample.label)) for sample in samples]
+            classes = [FULL.label(FULL.index(sample.label, sample.position.side))
+                       for sample in samples]
         except ValueError as error:
             raise ValueError(f"{path}: {error}") from error
         for line, sample, label in zip(filter(None, lines), samples, classes, strict=True):
@@ -83,7 +87,7 @@ def _write(path: Path, entries: list[Entry]) -> None:
 
 def _report(path: Path, entries: list[Entry]) -> str:
     counts = Counter(label for _, label in entries)
-    classes = ", ".join(f"{counts[name]} {name}" for name in BASIC.classes)
+    classes = ", ".join(f"{counts[name]} {name}" for name in FULL.classes)
     return f"{path}: {len(entries)} boards ({classes})"
 
 
